@@ -40,3 +40,11 @@ main{grid-template-columns:230px minmax(0,1fr) 205px;max-width:1900px}
 .canvasWrap .hint{max-width:calc(100% - 260px)}
 @media(max-width:1100px){main{grid-template-columns:200px minmax(0,1fr)}.right{grid-column:1/-1;display:block}.right .hotelHub{grid-row:auto}}
 @media(max-width:700px){main{display:flex;flex-direction:column}.canvasWrap .hotelHub{right:6px;bottom:44px;width:calc(100% - 12px);height:min(390px,calc(100% - 52px));padding:9px}.canvasWrap .hubOpen{right:7px;bottom:6px;font-size:11px;padding:7px}.canvasWrap .hint{left:7px;bottom:7px;max-width:calc(100% - 210px);font-size:9px;padding:5px}}
+
+/* v4.6 — chat lives in the room, not in a separate window */
+.canvasWrap .gameChatForm{position:absolute;left:14px;bottom:14px;z-index:4;display:flex;gap:7px;width:min(440px,calc(100% - 230px));padding:0;margin:0}
+.canvasWrap .gameChatForm input{min-width:0;flex:1;background:#101b32eb;border:1px solid #d0ac75;color:#fff;box-shadow:0 3px 14px #0007}
+.canvasWrap .gameChatForm button{flex-shrink:0}
+.canvasWrap .hint{bottom:67px;max-width:calc(100% - 30px);pointer-events:none}
+.canvasWrap .hubTabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:700px){.canvasWrap .gameChatForm{left:6px;bottom:6px;width:calc(100% - 148px);gap:4px}.canvasWrap .gameChatForm input{padding:7px;font-size:11px}.canvasWrap .gameChatForm button{padding:7px;font-size:11px}.canvasWrap .hint{bottom:48px;max-width:calc(100% - 12px)}}
