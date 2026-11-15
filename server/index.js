@@ -143,6 +143,25 @@ app.get('/api/social/friends',auth,async(req,res)=>{
   res.json(rows.map(r=>({id:r.id,username:r.username,status:r.status,direction:r.direction,online:[...io.sockets.sockets.values()].some(s=>s.data.user?.id===r.id),roomId:[...io.sockets.sockets.values()].find(s=>s.data.user?.id===r.id&&s.data.roomId)?.data.roomId||null})));
  }catch(e){fail(res,e)}
 });
+app.get('/api/social/unread',auth,async(req,res)=>{try{
+ const id=req.user.id;
+ const rows=(await pool.query(`SELECT m.sender_id AS friend_id,count(*)::int AS unread FROM social_messages m
+ JOIN social_friendships f ON f.user_low=LEAST(m.sender_id,m.recipient_id) AND f.user_high=GREATEST(m.sender_id,m.recipient_id) AND f.status='accepted'
+ LEFT JOIN social_reads r ON r.user_id=m.recipient_id AND r.friend_id=m.sender_id
+ WHERE m.recipient_id=$1 AND m.id>COALESCE(r.last_read_id,0)
+ AND NOT EXISTS(SELECT 1 FROM social_blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=m.sender_id) OR (b.blocked_id=$1 AND b.blocker_id=m.sender_id))
+ GROUP BY m.sender_id`,[id])).rows;
+ res.json({total:rows.reduce((n,r)=>n+r.unread,0),friends:rows});
+ }catch(e){fail(res,e)}
+});
+app.post('/api/social/messages/:id/read',auth,async(req,res)=>{const target=Number(req.params.id);if(!validId(target))return res.status(400).json({error:'Invalid friend'});try{
+ if(await blocked(req.user.id,target)||!await areFriends(req.user.id,target))return res.status(403).json({error:'Messaging requires friendship'});
+ await pool.query(`INSERT INTO social_reads(user_id,friend_id,last_read_id)
+ SELECT $1,$2,COALESCE(MAX(id),0) FROM social_messages WHERE sender_id=$2 AND recipient_id=$1
+ ON CONFLICT(user_id,friend_id) DO UPDATE SET last_read_id=GREATEST(social_reads.last_read_id,EXCLUDED.last_read_id)`,[req.user.id,target]);
+ res.json({ok:true});
+ }catch(e){fail(res,e)}
+});
 app.get('/api/social/blocks',auth,async(req,res)=>{
  try{res.json((await pool.query('SELECT u.id,u.username FROM social_blocks b JOIN users u ON u.id=b.blocked_id WHERE b.blocker_id=$1 ORDER BY b.created_at DESC',[req.user.id])).rows)}catch(e){fail(res,e)}
 });
