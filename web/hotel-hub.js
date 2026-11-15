@@ -2,7 +2,7 @@
 (()=>{
 'use strict';
 const tabs=[...document.querySelectorAll('.hubTab')];
-const panels={chat:document.getElementById('hubChat'),inventory:document.getElementById('hubInventory'),avatar:document.getElementById('hubAvatar')};
+const panels={inventory:document.getElementById('hubInventory'),avatar:document.getElementById('hubAvatar')};
 function activate(name,focus=false){
  for(const tab of tabs){
   const active=tab.dataset.hub===name;
@@ -22,7 +22,7 @@ for(const tab of tabs){
 }
 const hub=document.getElementById('hotelHub'),open=document.getElementById('hubOpen'),close=document.getElementById('hubClose');
 let previousFocus=null;
-function showHub(name='chat'){
+function showHub(name='inventory'){
  previousFocus=document.activeElement;
  hub.hidden=false;open.setAttribute('aria-expanded','true');
  activate(name);
@@ -36,6 +36,6 @@ function hideHub(){
 open.addEventListener('click',()=>hub.hidden?showHub():hideHub());
 close.addEventListener('click',hideHub);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!hub.hidden){e.preventDefault();hideHub();}});
-activate('chat');
+activate('inventory');
 console.info('[Pixel Haven] Unified hotel panel ready');
 })();
