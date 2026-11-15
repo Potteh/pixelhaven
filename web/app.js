@@ -68,7 +68,42 @@ function drawRoom(){
  // decorative columns
  isoBox(129,316,12,7,72,'#e6d6c1','#9a92a1','#b9a9ae');isoBox(870,316,12,7,72,'#e6d6c1','#9a92a1','#b9a9ae');
 }
-function render(){ctx.clearRect(0,0,1000,660);drawRoom();const entities=[...furniture.map(f=>({...f,type:'f'})),...players.values()].sort((a,b)=>(a.x+a.y)-(b.x+b.y));for(const e of entities)e.type==='f'?drawFurniture(e):drawAvatar(e);requestAnimationFrame(render)}requestAnimationFrame(render);
+
+// Pixel Haven Lobby v3: client-side decorative set dressing for the shared public lobby.
+// Decorations are visual only: they do not spend coins or alter saved player furniture.
+function lobbyDecor(){
+ const t=(x,y)=>tile(x,y);
+ const box=(x,y,w,h,z,top,left,right)=>{const p=t(x,y);isoBox(p.x,p.y,w,h,z,top,left,right)};
+ const plant=(x,y,scale=1)=>{const p=t(x,y),X=p.x,Y=p.y;ellipse(X,Y+2,23*scale,8*scale,'#121e2c55');isoBox(X,Y,12*scale,8*scale,21*scale,'#e2bc84','#83604d','#b28b68');for(let i=0;i<9;i++){const a=i*Math.PI*2/9;line(X,Y-22*scale,X+Math.cos(a)*24*scale,Y-48*scale+Math.sin(a)*13*scale,'#235a48',5*scale);ellipse(X+Math.cos(a)*24*scale,Y-48*scale+Math.sin(a)*13*scale,9*scale,5*scale,i%2?'#4da96d':'#77c97c')}};
+ const lamp=(x,y)=>{const p=t(x,y),X=p.x,Y=p.y;ellipse(X,Y,15,5,'#111c2b55');line(X,Y-5,X,Y-63,'#ba8e54',5);poly([[X-18,Y-65],[X+18,Y-65],[X+12,Y-45],[X-12,Y-45]],'#ffe3a1','#9c7045',3);ellipse(X,Y-46,27,11,'#f9c66a22')};
+ const sofa=(x,y)=>{const p=t(x,y),X=p.x,Y=p.y;ellipse(X,Y+5,40,11,'#17233755');isoBox(X,Y,35,20,18,'#c98774','#753d51','#a5545b');isoBox(X,Y-19,35,10,29,'#a64e5c','#6a334b','#893f54');isoBox(X-31,Y-6,9,10,27,'#d89b6f','#87465a','#b9655f');isoBox(X+31,Y-6,9,10,27,'#d89b6f','#87465a','#b9655f');ellipse(X-11,Y-22,10,5,'#e4a48a');ellipse(X+12,Y-17,10,5,'#df8b84')};
+ const table=(x,y)=>{const p=t(x,y),X=p.x,Y=p.y;isoBox(X,Y-9,24,13,9,'#dce9e8','#7b5e53','#a17e63');line(X-12,Y,X-12,Y+12,'#9c784e',5);line(X+12,Y,X+12,Y+12,'#9c784e',5);ellipse(X,Y-19,8,3,'#8fd7e6')};
+ // Back-wall signage and gold trim, rendered into the hotel environment.
+ ctx.save();ctx.shadowColor='#ffc65b';ctx.shadowBlur=14;ctx.textAlign='center';ctx.font='bold 30px system-ui';ctx.fillStyle='#f5c56c';ctx.fillText('PIXEL HAVEN',500,66);ctx.shadowBlur=0;ctx.font='bold 12px system-ui';ctx.fillStyle='#e8d8b5';ctx.fillText('THE GRAND LOBBY',500,83);ctx.restore();
+ // Red runner over the central floor tiles.
+ for(let x=3;x<=6;x++)for(let y=3;y<=6;y++){const q=t(x,y);poly([[q.x,q.y-19],[q.x+34,q.y],[q.x,q.y+19],[q.x-34,q.y]],(x+y)%2?'#934c60':'#ad5964','#d6a36a',2)}
+ // Architectural highlights.
+ line(118,233,499,24,'#d8b77e',4);line(501,24,883,233,'#d8b77e',4);
+ // Furniture set dressing, in back-to-front tile order.
+ const objects=[
+  {x:0,y:0,fn:()=>plant(0,0,.95)},
+  {x:0,y:7,fn:()=>plant(0,7,.9)},
+  {x:7,y:0,fn:()=>plant(7,0,.9)},
+  {x:2,y:2,fn:()=>{box(2,2,33,19,30,'#e5c78d','#624a48','#a6795a');const p=t(2,2);ctx.font='bold 12px system-ui';ctx.fillStyle='#402e39';ctx.textAlign='center';ctx.fillText('RECEPTION',p.x,p.y-38)}},
+  {x:2,y:6,fn:()=>sofa(2,6)},
+  {x:6,y:2,fn:()=>sofa(6,2)},
+  {x:3,y:7,fn:()=>table(3,7)},
+  {x:7,y:3,fn:()=>table(7,3)},
+  {x:1,y:5,fn:()=>lamp(1,5)},
+  {x:5,y:1,fn:()=>lamp(5,1)},
+  {x:7,y:7,fn:()=>{const p=t(7,7),X=p.x,Y=p.y;ellipse(X,Y+5,40,13,'#1c3e4d55');isoBox(X,Y,32,20,18,'#c6e7ec','#567c93','#79a9bd');ellipse(X,Y-18,24,9,'#7fe2ef');for(let i=-2;i<=2;i++){const xx=X+i*9;line(xx,Y-27,xx+i*2,Y-55-Math.cos(i)*6,'#91f3ff',2)}ellipse(X,Y-57,10,5,'#d0ffff')}}
+ ];
+ objects.sort((a,b)=>a.x+a.y-b.x-b.y);objects.forEach(o=>o.fn());
+ // Subtle warm light spots and floor gleam.
+ for(const [x,y] of [[1,5],[5,1],[7,7]]){const q=t(x,y);const g=ctx.createRadialGradient(q.x,q.y,1,q.x,q.y,72);g.addColorStop(0,'#f9d88a22');g.addColorStop(1,'#f9d88a00');ctx.fillStyle=g;ctx.fillRect(q.x-72,q.y-72,144,144)}
+}
+
+function render(){ctx.clearRect(0,0,1000,660);drawRoom();if(room&&Number(room.id)===1)lobbyDecor();const entities=[...furniture.map(f=>({...f,type:'f'})),...players.values()].sort((a,b)=>(a.x+a.y)-(b.x+b.y));for(const e of entities)e.type==='f'?drawFurniture(e):drawAvatar(e);requestAnimationFrame(render)}requestAnimationFrame(render);
 function clickTile(e){if(!room)return;const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*1000/r.width,py=(e.clientY-r.top)*660/r.height;const dx=(px-500)/43,dy=(py-118)/24;const x=Math.floor((dx+dy)/2+.5),y=Math.floor((dy-dx)/2+.5);if(x<0||y<0||x>9||y>9)return;if(selected){socket.emit('furniture:place',{kind:selected,x,y},a=>{if(a.error)toast(a.error);else{selected=null;$('#placement').textContent='';loadInventory()}})}else{const p=players.get(socket.id);if(p){p.x=x;p.y=y}socket.emit('player:move',{x,y})}}
 canvas.addEventListener('click',clickTile);
 function chatLine(username,body){const line=document.createElement('div'),strong=document.createElement('strong');strong.textContent=username+': ';line.append(strong,document.createTextNode(body));$('#chat').append(line);while($('#chat').children.length>80)$('#chat').firstChild.remove();$('#chat').scrollTop=$('#chat').scrollHeight}
