@@ -40,7 +40,7 @@ function render(){
    const art=make('div','hotelRoomThumbnail');art.textContent=Number(r.id)===1?'🏨':'🛋️';
    const details=make('div','hotelRoomDetails');
    const title=make('strong',null,r.name);const description=make('p',null,r.description||'Come in and explore!');
-   const meta=make('small',null,(r.owner?'By '+r.owner:'Official Hotel Room')+' · '+(r.is_public?'Public':'Private'));
+   const meta=make('small',null,(r.owner?'By '+r.owner:'Official Hotel Room')+' · '+(r.is_public?'🌐 Open':'🔒 Locked'));
    details.append(title,description,meta);
    const enter=make('button','hotelEnter','Enter Room');
    enter.onclick=()=>{hide();window.join?.(r.id)};
@@ -70,7 +70,7 @@ window.pixelRoomSettings=(room,onSaved)=>{
  const privacy=make('input');privacy.type='checkbox';privacy.checked=room.is_public;
  const label=(text,input)=>{const l=make('label','roomomaticDesignField',text);l.append(input);panel.append(l)};
  panel.append(title);label('Room name',name);label('Description',description);
- const visibility=make('label','roomomaticPrivacy');visibility.append(privacy,document.createTextNode(' Public room — everyone can join'));panel.append(visibility);
+ const visibility=make('label','roomomaticPrivacy');visibility.append(privacy,document.createTextNode(' Open room — anyone can enter (uncheck to lock)'));panel.append(visibility);
  const readStyle=roomDesignFields(panel,room);
  const status=make('p','roomomaticStatus');panel.append(status);
  const actions=make('div','roomSettingsActions'),cancel=make('button',null,'Cancel'),save=make('button',null,'Save Room');
@@ -89,7 +89,7 @@ function renderCreator(){
  const intro=make('p',null,'Design your own room in the hotel. Choose a name and who can enter.');
  const nameLabel=make('label',null,'Room name');const name=make('input');name.required=true;name.minLength=3;name.maxLength=64;name.placeholder='e.g. Winter Rooftop Lounge';nameLabel.append(name);
  const descriptionLabel=make('label',null,'Description');const description=make('textarea');description.maxLength=240;description.rows=3;description.placeholder='Tell guests what makes your room special';descriptionLabel.append(description);
- const privacy=make('label','roomomaticPrivacy');const publicInput=make('input');publicInput.type='checkbox';publicInput.checked=true;privacy.append(publicInput,document.createTextNode('Public room — visible in Explore Rooms'));
+ const privacy=make('label','roomomaticPrivacy');const publicInput=make('input');publicInput.type='checkbox';publicInput.checked=true;privacy.append(publicInput,document.createTextNode(' Open room — visible in Explore Rooms (uncheck to lock)'));
  const styleSection=make('fieldset','roomomaticDesign');styleSection.append(make('legend',null,'Room appearance'));const readStyle=roomDesignFields(styleSection);const preview=make('div','roomomaticPreview');preview.append(make('span',null,'🛋️'),make('strong',null,'Your new room'),make('small',null,'10 × 10 isometric floor · decorate with your furniture'));
  const status=make('p','roomomaticStatus');
  const submit=make('button','roomomaticCreate','✨ Create Room');submit.type='submit';
