@@ -23,8 +23,41 @@ const denomination={gold_bar:1000,nickel:5,quarter:25};
 function itemRows(title){const box=el('div');box.className='tradeOffer';box.append(el('h4',title));const lines=el('div');box.append(lines);const add=button('+ Add item',()=>{const row=el('div');row.className='tradeLine';const kind=el('select');for(const k of kinds){const o=el('option',k.replaceAll('_',' ')+(denomination[k]?' ('+denomination[k]+' coins)':''));o.value=k;kind.append(o)}const qty=input('number');qty.min=1;qty.max=99;qty.value=1;row.append(kind,qty,button('×',()=>row.remove()));lines.append(row)});box.append(add);add.onclick();return {box,read:()=>[...lines.children].map(r=>({kind:r.querySelector('select').value,quantity:Number(r.querySelector('input').value)}))}}
 async function trade(){const p=playerSearch('Trade with');const offer=itemRows('You give'),request=itemRows('You receive');body.append(el('h3','🤝 Furniture Exchange'),el('p','Both players must own the items when the trade is accepted. Coin tokens are tradeable inventory items.'),p.wrap,offer.box,request.box,button('Propose Trade',async()=>{try{const r=await api('/trades','POST',{recipientId:Number(p.select.value),offered:offer.read(),requested:request.read()});status('Trade #'+r.id+' sent');await showTrades()}catch(e){status(e.message)}}));const list=el('div');body.append(list);
  async function showTrades(){const trades=await api('/trades');list.replaceChildren(el('h4','Trade offers'));for(const t of trades){const row=el('article');row.className='communityCase';row.append(el('strong','#'+t.id+' · '+t.sender+' ↔ '+t.recipient+' · '+t.status));row.append(el('p','Offered: '+JSON.stringify(t.offered)+' | Requested: '+JSON.stringify(t.requested)));if(t.status==='pending'){const incoming=Number(t.recipient_id)===Number(user.id);for(const action of incoming?['accept','decline']:['cancel'])row.append(button(action,async()=>{try{await api('/trades/'+t.id+'/decision','POST',{decision:action});await showTrades()}catch(e){status(e.message)}}))}list.append(row)}}await showTrades()}
+async function staffChatLogs(){
+ const section=el('section');section.className='staffChatLogs';
+ const title=el('h3','💬 Chat Logs');const filters=el('div');filters.className='chatLogFilters';
+ const roomId=input('number','Room ID (optional)'),userId=input('number','User ID (optional)'),query=input('search','Search messages');
+ roomId.min='1';userId.min='1';query.maxLength=80;
+ const results=el('div');results.className='chatLogResults';
+ const info=el('p','Staff-only room chat history · newest first');info.className='communityStatus';
+ const search=button('Search Chat Logs',()=>load(false)),more=button('Load older messages',()=>load(true));more.hidden=true;
+ filters.append(roomId,userId,query,search);
+ section.append(title,info,filters,results,more);body.append(section);
+ let cursor=null;
+ async function load(append){
+  if(!append){cursor=null;results.replaceChildren()}
+  const params=new URLSearchParams({limit:'50'});
+  if(roomId.value)params.set('roomId',roomId.value);
+  if(userId.value)params.set('userId',userId.value);
+  if(query.value.trim())params.set('q',query.value.trim());
+  if(append&&cursor)params.set('before',cursor);
+  search.disabled=true;more.disabled=true;
+  try{
+   const data=await api('/mod/chatlogs?'+params.toString());
+   for(const m of data.messages){
+    const row=el('article');row.className='communityCase chatLogEntry';
+    row.append(el('strong',(m.username||'Deleted user')+' (#'+(m.user_id||'—')+') · '+m.room_name+' (#'+m.room_id+')'));
+    row.append(el('small',new Date(m.created_at).toLocaleString()));
+    row.append(el('p',m.body));results.append(row);
+   }
+   if(!data.messages.length&&!append)results.append(el('p','No chat messages match these filters.'));
+   cursor=data.nextBefore;more.hidden=!cursor;info.textContent='Staff-only room chat history · newest first';
+  }catch(e){info.textContent=e.message}finally{search.disabled=false;more.disabled=false}
+ }
+ await load(false);
+}
 async function staff(){if(!['owner','admin','moderator'].includes(user.role)){status('Staff access required');return}const reportList=el('div');body.append(el('h3','📋 Issue Browser'),button('Refresh reports',refresh),reportList);
-async function refresh(){try{const reports=await api('/mod/reports');reportList.replaceChildren();for(const r of reports){const row=el('article');row.className='communityCase';row.append(el('strong','#'+r.id+' · '+r.category+' · '+r.status),el('p','Reporter: '+r.reporter+' | Player: '+r.target),el('p',r.details));for(const action of ['picked','resolved','dismissed'])row.append(button(action,async()=>{try{await api('/mod/reports/'+r.id,'PATCH',{status:action});await refresh()}catch(e){status(e.message)}}));reportList.append(row)}}catch(e){status(e.message)}}await refresh();
+async function refresh(){try{const reports=await api('/mod/reports');reportList.replaceChildren();for(const r of reports){const row=el('article');row.className='communityCase';row.append(el('strong','#'+r.id+' · '+r.category+' · '+r.status),el('p','Reporter: '+r.reporter+' | Player: '+r.target),el('p',r.details));for(const action of ['picked','resolved','dismissed'])row.append(button(action,async()=>{try{await api('/mod/reports/'+r.id,'PATCH',{status:action});await refresh()}catch(e){status(e.message)}}));reportList.append(row)}}catch(e){status(e.message)}}await refresh();await staffChatLogs();
 const p=playerSearch('Find player');const reason=input('text','Reason for action');const amount=input('number','Credits adjustment');const role=el('select');for(const r of ['player','moderator','admin']){const o=el('option',r);o.value=r;role.append(o)}
 body.append(el('h3','👤 Player Management'),p.wrap,field('Reason',reason));if(user.role==='owner'){const self=button('Select my account',()=>{let option=[...p.select.options].find(o=>o.value===String(user.id));if(!option){option=el('option',user.username+' · owner (you)');option.value=String(user.id);p.select.append(option)}p.select.value=String(user.id)});body.append(self)}
 const actions=el('div');actions.className='communityActions';body.append(actions);
