@@ -48,3 +48,10 @@ main{grid-template-columns:230px minmax(0,1fr) 205px;max-width:1900px}
 .canvasWrap .hint{bottom:67px;max-width:calc(100% - 30px);pointer-events:none}
 .canvasWrap .hubTabs{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:700px){.canvasWrap .gameChatForm{left:6px;bottom:6px;width:calc(100% - 148px);gap:4px}.canvasWrap .gameChatForm input{padding:7px;font-size:11px}.canvasWrap .gameChatForm button{padding:7px;font-size:11px}.canvasWrap .hint{bottom:48px;max-width:calc(100% - 12px)}}
+
+/* Pixel Haven v5.0: compact action buttons inside the game */
+.canvasWrap .emoteBar{position:absolute;left:14px;bottom:59px;z-index:4;display:flex;gap:5px;padding:5px;background:#16243ddc;border:1px solid #b99b73;border-radius:10px;box-shadow:0 4px 15px #0006}
+.canvasWrap .emoteBar button{font-size:17px;padding:5px 9px;min-width:34px;border-radius:7px;line-height:1.3}
+.canvasWrap .emoteBar #standUp{font-size:12px;white-space:nowrap}
+.canvasWrap .hint{bottom:111px}
+@media(max-width:700px){.canvasWrap .emoteBar{left:6px;bottom:43px;gap:3px;padding:3px}.canvasWrap .emoteBar button{font-size:14px;padding:4px 6px;min-width:26px}.canvasWrap .emoteBar #standUp{font-size:10px}.canvasWrap .hint{bottom:83px}}
