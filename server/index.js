@@ -133,6 +133,31 @@ const pair=(a,b)=>[Math.min(a,b),Math.max(a,b)];
 const blocked=async(a,b)=>(await pool.query('SELECT 1 FROM social_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',[a,b])).rowCount>0;
 const areFriends=async(a,b)=>{const [lo,hi]=pair(a,b);return (await pool.query("SELECT 1 FROM social_friendships WHERE user_low=$1 AND user_high=$2 AND status='accepted'",[lo,hi])).rowCount>0};
 const socialNotify=(id,event,data)=>{for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===id)socket.emit(event,data)};
+// Badge catalog, profile badges and administrator-managed grants.
+app.get('/api/badges',auth,async(req,res)=>{try{res.json((await pool.query('SELECT code,name,image_path FROM badge_definitions ORDER BY code')).rows)}catch(e){fail(res,e)}});
+app.get('/api/users/:id/badges',auth,async(req,res)=>{const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Invalid player'});try{res.json((await pool.query('SELECT d.code,d.name,d.image_path,b.granted_at FROM user_badges b JOIN badge_definitions d ON d.code=b.code WHERE b.user_id=$1 ORDER BY b.granted_at DESC',[id])).rows)}catch(e){fail(res,e)}});
+app.post('/api/mod/badges/grant',auth,adminGuard,async(req,res)=>{
+ const id=Number(req.body.userId),code=String(req.body.code||'').trim().toUpperCase();
+ if(!validId(id)||!/^[A-Z0-9_]{2,16}$/.test(code))return res.status(400).json({error:'Invalid player or badge code'});
+ try{
+  const target=(await pool.query('SELECT role FROM users WHERE id=$1',[id])).rows[0];
+  if(!target)return res.status(404).json({error:'Player not found'});
+  if(target.role==='owner'&&req.user.role!=='owner')return res.status(403).json({error:'Owner badges require owner access'});
+  const result=await pool.query('INSERT INTO user_badges(user_id,code,granted_by) VALUES($1,$2,$3) ON CONFLICT(user_id,code) DO NOTHING RETURNING code',[id,code,req.user.id]);
+  socialNotify(id,'badges:changed',{userId:id});res.json({ok:true,granted:!!result.rowCount});
+ }catch(e){if(e.code==='23503')return res.status(404).json({error:'Badge code not found'});fail(res,e)}
+});
+app.post('/api/mod/badges/revoke',auth,adminGuard,async(req,res)=>{
+ const id=Number(req.body.userId),code=String(req.body.code||'').trim().toUpperCase();
+ if(!validId(id)||!/^[A-Z0-9_]{2,16}$/.test(code))return res.status(400).json({error:'Invalid player or badge code'});
+ try{
+  const target=(await pool.query('SELECT role FROM users WHERE id=$1',[id])).rows[0];
+  if(!target)return res.status(404).json({error:'Player not found'});
+  if(target.role==='owner'&&req.user.role!=='owner')return res.status(403).json({error:'Owner badges require owner access'});
+  const result=await pool.query('DELETE FROM user_badges WHERE user_id=$1 AND code=$2 RETURNING code',[id,code]);
+  socialNotify(id,'badges:changed',{userId:id});res.json({ok:true,revoked:!!result.rowCount});
+ }catch(e){fail(res,e)}
+});
 app.get('/api/social/friends',auth,async(req,res)=>{
  try{
   const id=req.user.id;
