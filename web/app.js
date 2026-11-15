@@ -179,7 +179,7 @@ function clickTile(e){
   if(['vending_machine','teleporter','door','smoke_machine'].includes(item.kind)){
    socket.emit('furniture:interact',item.id,a=>toast(a?.error||(a.held?'Holding '+(heldNames[a.held]||a.held):({teleporter:'Teleported!',door:'Door opened!',smoke_machine:'Smoke activated!'}[item.kind]||'Activated!'))));return;
   }
-  if(['chair','sofa','bed','club_sofa','royal_throne','christmas_sofa'].includes(item.kind)){
+  if(['chair','sofa','bed','club_sofa','royal_throne','autumn_throne','christmas_sofa'].includes(item.kind)){
    socket.emit('player:sit',item.id,a=>{if(a?.error)toast(a.error)});return;
   }
  }
