@@ -89,13 +89,31 @@
     const now=performance.now(),dt=Math.min((now-m.last)/1000,.06);m.last=now;
     const dx=p.x-m.x,dy=p.y-m.y,dist=Math.hypot(dx,dy);
     if(dist>.001){m.dir=direction(dx,dy,m.dir);const step=Math.min(dist,dt*4.3);m.x+=dx/dist*step;m.y+=dy/dist*step;m.stride+=step*2.8}
-    const walking=dist>.045;
+    const seated=p.pose?.type==='sit';
+    const walking=!seated&&dist>.045;
     const frame=walking?1+Math.floor(m.stride)%3:0;
     const pos=tile(m.x,m.y),x=pos.x,y=pos.y;
     ctx.fillStyle='#10182a66';ctx.beginPath();ctx.ellipse(x,y+4,17,6,0,0,Math.PI*2);ctx.fill();
     const sprite=makeSprite(p.user.avatar||{},m.dir,frame);
     ctx.save();ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(sprite,Math.round(x-34),Math.round(y-104),68,106);
+    if(seated){
+      // Upper body remains upright while knees fold forward on the seat.
+      const skin=rgb(p.user.avatar?.skin,'#e8ad7d');
+      ctx.drawImage(sprite,0,0,34,39,Math.round(x-34),Math.round(y-92),68,78);
+      ctx.fillStyle='#304665';ctx.fillRect(x-19,y-18,18,9);ctx.fillRect(x+1,y-18,18,9);
+      ctx.fillStyle='#171c30';ctx.fillRect(x-21,y-10,19,7);ctx.fillRect(x+1,y-10,19,7);
+    }else{
+      const emote=p.emote?.until>Date.now()?p.emote.name:null;
+      const bounce=emote==='cheer'?Math.abs(Math.sin(now/110))*7:emote==='dance'?Math.abs(Math.sin(now/145))*5:0;
+      const sway=emote==='dance'?Math.sin(now/170)*8:emote==='laugh'?Math.sin(now/95)*2:0;
+      ctx.translate(x,y-bounce);ctx.rotate(sway*Math.PI/180);
+      ctx.drawImage(sprite,-34,-104,68,106);
+      if(emote==='wave'||emote==='cheer'){
+        const lift=emote==='wave'?Math.sin(now/125)*6:0;
+        ctx.fillStyle=rgb(p.user.avatar?.shirt,'#4b86e8');ctx.fillRect(24,-94+lift,9,31);
+        ctx.fillStyle=rgb(p.user.avatar?.skin,'#e8ad7d');ctx.fillRect(24,-101+lift,9,10);
+      }
+    }
     ctx.restore();
     const name=String(p.user.username||'Guest').slice(0,24);
     ctx.font='bold 12px system-ui';ctx.textAlign='center';
@@ -108,5 +126,5 @@
   window.pixelAvatarPosition=id=>{const m=motion.get(id);return m?tile(m.x,m.y):null;};
   // Remove old interpolation entries after room transitions and disconnects.
   setInterval(()=>{if(typeof players==='undefined')return;for(const id of motion.keys())if(!players.has(id))motion.delete(id)},10000);
-  console.info('[Pixel Haven] v4.9 eight-direction avatar walk cycle loaded');
+  console.info('[Pixel Haven] v5.0 seated poses and multiplayer emotes loaded');
 })();
