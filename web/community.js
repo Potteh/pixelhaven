@@ -28,7 +28,7 @@ async function refresh(){try{const reports=await api('/mod/reports');reportList.
 const p=playerSearch('Find player');const reason=input('text','Reason for action');const amount=input('number','Credits adjustment');const role=el('select');for(const r of ['player','moderator','admin']){const o=el('option',r);o.value=r;role.append(o)}
 body.append(el('h3','👤 Player Management'),p.wrap,field('Reason',reason));
 const actions=el('div');actions.className='communityActions';body.append(actions);
-async function act(action,extra={}){try{await api('/mod/action','POST',{userId:Number(p.select.value),action,reason:reason.value,...extra});status(action+' completed')}catch(e){status(e.message)}}
+async function act(action,extra={}){try{const result=await api('/mod/action','POST',{userId:Number(p.select.value),action,reason:reason.value,...extra});if(action==='credits'){status('Credits updated. New balance: 🪙 '+result.coins);await window.pixelRefreshCoins?.()}else status(action+' completed')}catch(e){status(e.message)}}
 actions.append(button('⚠️ Warn',()=>act('warn')));
 if(['admin','owner'].includes(user.role)){actions.append(button('⛔ Ban',()=>act('ban')),button('Unban',()=>act('unban')));body.append(field('Credit amount (positive or negative)',amount));actions.append(button('Adjust credits',()=>act('credits',{amount:Number(amount.value)})))}
 if(user.role==='owner'){body.append(field('Assign role',role));actions.append(button('Set role',()=>act('role',{role:role.value})))}
