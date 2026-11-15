@@ -626,6 +626,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    const held=choice==='icecream'?flavors[Math.floor(Math.random()*flavors.length)]:choice;
    s.data.lastDispense=now;s.data.held=held;
    io.to('room:'+roomId).emit('player:held',{socketId:s.id,held});
+   io.to('room:'+roomId).emit('furniture:effect',{id,kind:'dispense',flavor:held,until:now+2400});
    ack({ok:true,held});
   }catch(e){console.error(e);ack({error:'Dispenser unavailable'})}
  });
