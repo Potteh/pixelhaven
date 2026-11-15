@@ -135,9 +135,9 @@ window.drawAvatar=function(p){
  ctx.restore();
  const name=String(p.user.username||'Guest').slice(0,24);
  ctx.font='bold 12px system-ui';ctx.textAlign='center';
- const width=Math.min(180,ctx.measureText(name).width+18);
+ const mod=p.user.role==='moderator';const prefix=mod?'MOD-':'';const width=Math.min(180,ctx.measureText(prefix+name).width+18);
  ctx.fillStyle='#10192de8';ctx.fillRect(x-width/2,y-125,width,21);
- ctx.fillStyle='#fff';ctx.fillText(name,x,y-110);
+ if(mod){ctx.fillStyle='#ffd27e';ctx.textAlign='left';const full=ctx.measureText(prefix+name).width;ctx.font='900 12px system-ui';ctx.fillText(prefix,x-full/2,y-110);ctx.font='bold 12px system-ui';ctx.fillStyle='#fff';ctx.fillText(name,x-full/2+ctx.measureText(prefix).width,y-110)}else{ctx.fillStyle='#fff';ctx.fillText(name,x,y-110)}
 };
 window.pixelAvatarPreview=(g,a,dir='front')=>{
  const im=sprite(a||{},dir,0);
