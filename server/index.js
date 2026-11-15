@@ -42,7 +42,53 @@ const leave=s=>{const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s
 io.use(async(socket,next)=>{try{const p=jwt.verify(socket.handshake.auth.token,secret);const u=await getUser(p.id);if(!u)return next(new Error('Unauthorized'));const b=await pool.query('SELECT 1 FROM bans WHERE user_id=$1 AND (expires_at IS NULL OR expires_at>now())',[u.id]);if(b.rowCount)return next(new Error('Suspended'));socket.data.user=u;next();}catch{next(new Error('Unauthorized'));}});
 io.on('connection',s=>{let lastChat=0,lastMove=0;
  s.on('room:join',async(id,ack=()=>{})=>{try{id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:s.data.user,x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
- s.on('player:move',({x,y}={})=>{const now=Date.now();if(now-lastMove<80)return;lastMove=now;x=Number(x);y=Number(y);if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9||!s.data.roomId)return;positions.set(s.id,{x,y});s.to(`room:${s.data.roomId}`).emit('player:moved',{socketId:s.id,x,y});});
+ // Server-authoritative tile walking: one adjacent tile every 240 ms.
+ // A new click cancels the previous route; players cannot teleport by sending coordinates.
+ let walkTimer=null;
+ const stopWalking=()=>{if(walkTimer){clearInterval(walkTimer);walkTimer=null;}};
+ s.on('player:move',async({x,y}={})=>{
+   const now=Date.now();if(now-lastMove<100)return;lastMove=now;
+   x=Number(x);y=Number(y);
+   if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9||!s.data.roomId)return;
+   stopWalking();
+   const roomId=s.data.roomId;
+   const current=positions.get(s.id);if(!current)return;
+   // Orthogonal grid routing around persisted furniture. Decorative lobby art
+   // remains visual-only until it has corresponding collision footprints.
+   let blocked=new Set();
+   try{
+     const rows=(await pool.query('SELECT x,y FROM furniture WHERE room_id=$1',[roomId])).rows;
+     blocked=new Set(rows.map(p=>p.x+','+p.y));
+   }catch(e){console.error('Path query failed',e);return;}
+   if(s.data.roomId!==roomId)return;
+   blocked.delete(current.x+','+current.y);
+   if(blocked.has(x+','+y))return;
+   const start=current.x+','+current.y,goal=x+','+y;
+   const queue=[{x:current.x,y:current.y}],seen=new Set([start]),parent=new Map();
+   for(let i=0;i<queue.length;i++){
+     const p=queue[i],key=p.x+','+p.y;
+     if(key===goal)break;
+     for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+       const nx=p.x+dx,ny=p.y+dy,k=nx+','+ny;
+       if(nx<0||ny<0||nx>9||ny>9||seen.has(k)||blocked.has(k))continue;
+       seen.add(k);parent.set(k,key);queue.push({x:nx,y:ny});
+     }
+   }
+   if(!seen.has(goal))return;
+   const path=[];let key=goal;
+   while(key!==start){const [px,py]=key.split(',').map(Number);path.unshift({x:px,y:py});key=parent.get(key);}
+   let index=0;
+   const step=()=>{
+     if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
+     const next=path[index++];if(!next){stopWalking();return;}
+     positions.set(s.id,next);
+     io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:next.x,y:next.y});
+     if(index>=path.length)stopWalking();
+   };
+   if(path.length){walkTimer=setInterval(step,240);step();}
+ });
+ s.on('disconnecting',stopWalking);
+ s.on('room:join',stopWalking);
  s.on('chat:send',async(body,ack=()=>{})=>{try{const now=Date.now();if(now-lastChat<900)return ack({error:'Slow down'});lastChat=now;body=safe(body,240);if(!body||!s.data.roomId)return ack({error:'Cannot send'});await pool.query('INSERT INTO messages(room_id,user_id,body) VALUES($1,$2,$3)',[s.data.roomId,s.data.user.id,body]);io.to(`room:${s.data.roomId}`).emit('chat:message',{username:s.data.user.username,userId:s.data.user.id,body,socketId:s.id});ack({ok:true});}catch(e){console.error(e);ack({error:'Chat failed'});}});
  s.on('furniture:place',async({kind,x,y}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3',[id,x,y]);if(occ.rowCount){await client.query('ROLLBACK');return ack({error:'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y) VALUES($1,$2,$3,$4,$5) RETURNING id,kind,x,y,rotation',[id,s.data.user.id,kind,x,y])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
  s.on('furniture:remove',async(itemId,ack=()=>{})=>{try{const id=s.data.roomId;const r=await pool.query('DELETE FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3 RETURNING kind',[Number(itemId),id,s.data.user.id]);if(!r.rowCount)return ack({error:'Not allowed'});await pool.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[s.data.user.id,r.rows[0].kind]);io.to(`room:${id}`).emit('furniture:removed',Number(itemId));ack({ok:true});}catch(e){console.error(e);ack({error:'Remove failed'});}});
