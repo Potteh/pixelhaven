@@ -599,20 +599,50 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  });
  s.on('disconnecting',stopWalking);
  s.on('room:join',stopWalking);
- s.on('player:sit',async(itemId,ack=()=>{})=>{
+ const seatingKinds=new Set(['chair','sofa','bed','club_sofa','royal_throne','autumn_throne','christmas_sofa']);
+ const seatingCapacity=kind=>['sofa','club_sofa','christmas_sofa','bed'].includes(kind)?2:1;
+ s.on('player:sit',async(request,ack=()=>{})=>{
    const roomId=s.data.roomId;if(!roomId)return ack({error:'Join a room first'});
-   const item=(await pool.query("SELECT id,kind,x,y FROM furniture WHERE id=$1 AND room_id=$2",[Number(itemId),roomId])).rows[0];
-   if(!item||!['chair','sofa','bed','club_sofa','royal_throne','autumn_throne','christmas_sofa'].includes(item.kind))return ack({error:'Not a seat'});
-   if([...poses.entries()].some(([sid,pose])=>sid!==s.id&&pose?.seatId===item.id))return ack({error:'Seat occupied'});
-   stopWalking();
-   positions.set(s.id,{x:item.x,y:item.y});
-   const pose={type:'sit',seatId:item.id,kind:item.kind};
-   poses.set(s.id,pose);
-   io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:item.x,y:item.y});
-   io.to('room:'+roomId).emit('player:pose',{socketId:s.id,pose});
-   ack({ok:true});
+   const id=Number(typeof request==='object'?request?.id:request);
+   if(!Number.isSafeInteger(id)||id<1)return ack({error:'Invalid seat'});
+   try{
+     const item=(await pool.query('SELECT id,kind,x,y FROM furniture WHERE id=$1 AND room_id=$2',[id,roomId])).rows[0];
+     if(!item||!seatingKinds.has(item.kind))return ack({error:'Not a seat'});
+     const current=positions.get(s.id);
+     if(!current||Math.abs(current.x-item.x)+Math.abs(current.y-item.y)>5)return ack({error:'Move closer to sit'});
+     const used=new Set([...poses.entries()].filter(([sid,pose])=>sid!==s.id&&pose?.seatId===item.id&&io.sockets.sockets.get(sid)?.data.roomId===roomId).map(([,pose])=>pose.slot||0));
+     const slot=Array.from({length:seatingCapacity(item.kind)},(_,i)=>i).find(i=>!used.has(i));
+     if(slot===undefined)return ack({error:'Seat occupied'});
+     stopWalking();
+     positions.set(s.id,{x:item.x,y:item.y});
+     const pose={type:item.kind==='bed'?'lie':'sit',seatId:item.id,kind:item.kind,slot};
+     poses.set(s.id,pose);
+     io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:item.x,y:item.y});
+     io.to('room:'+roomId).emit('player:pose',{socketId:s.id,pose});
+     ack({ok:true,pose});
+   }catch(e){console.error(e);ack({error:'Could not use seat'})}
  });
- s.on('player:stand',(_,ack=()=>{})=>{if(!s.data.roomId)return ack({error:'Not in a room'});poses.delete(s.id);io.to('room:'+s.data.roomId).emit('player:pose',{socketId:s.id,pose:null});ack({ok:true})});
+ s.on('player:stand',async(_,ack=()=>{})=>{
+   const roomId=s.data.roomId;if(!roomId)return ack({error:'Not in a room'});
+   const current=positions.get(s.id),pose=poses.get(s.id);
+   if(!pose)return ack({ok:true});
+   try{
+     const rows=(await pool.query('SELECT x,y FROM furniture WHERE room_id=$1',[roomId])).rows;
+     const blocked=new Set(rows.map(f=>f.x+','+f.y));
+     const origin=current||{x:4,y:4};
+     const candidates=[];
+     for(let distance=1;distance<=18;distance++)for(let dx=-distance;dx<=distance;dx++)for(let dy=-distance;dy<=distance;dy++){
+       if(Math.abs(dx)+Math.abs(dy)!==distance)continue;
+       const x=origin.x+dx,y=origin.y+dy;
+       if(x>=0&&x<=9&&y>=0&&y<=9&&!blocked.has(x+','+y))candidates.push({x,y});
+     }
+     const next=candidates[0];if(!next)return ack({error:'No free floor tile to stand on'});
+     positions.set(s.id,next);poses.delete(s.id);
+     io.to('room:'+roomId).emit('player:moved',{socketId:s.id,...next});
+     io.to('room:'+roomId).emit('player:pose',{socketId:s.id,pose:null});
+     ack({ok:true});
+   }catch(e){console.error(e);ack({error:'Could not stand'})}
+ });
  let lastEmote=0;
  s.on('player:emote',(name,ack=()=>{})=>{
    if(!s.data.roomId||!['wave','dance','laugh','cheer'].includes(name))return ack({error:'Invalid emote'});
