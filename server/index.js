@@ -50,6 +50,19 @@ app.post('/api/rooms',auth,async(req,res)=>{try{const name=safe(req.body.name,64
 app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
 app.get('/api/inventory',auth,async(req,res)=>{try{res.json((await pool.query('SELECT kind,quantity FROM inventory WHERE user_id=$1',[req.user.id])).rows);}catch(e){fail(res,e);}});
 app.post('/api/buy',auth,async(req,res)=>{const kind=safe(req.body.kind,30),price=CATALOG[kind];if(!price)return res.status(400).json({error:'Unknown item'});const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 AND coins >= $1 RETURNING coins',[price,req.user.id]);if(!r.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Not enough coins'});}await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[req.user.id,kind]);await client.query('COMMIT');res.json({coins:r.rows[0].coins});}catch(e){await client.query('ROLLBACK');fail(res,e);}finally{client.release();}});
+const COIN_TOKENS={gold_bar:1000,nickel:5,quarter:25};
+app.post('/api/redeem',auth,async(req,res)=>{
+ const kind=safe(req.body.kind,30),value=COIN_TOKENS[kind],quantity=Number(req.body.quantity||1);
+ if(!value||!Number.isInteger(quantity)||quantity<1||quantity>99)return res.status(400).json({error:'Invalid coin token'});
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const deducted=await client.query('UPDATE inventory SET quantity=quantity-$1 WHERE user_id=$2 AND kind=$3 AND quantity >= $1 RETURNING quantity',[quantity,req.user.id,kind]);
+  if(!deducted.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Not enough tokens'})}
+  const updated=await client.query('UPDATE users SET coins=coins+$1 WHERE id=$2 RETURNING coins',[value*quantity,req.user.id]);
+  await client.query('COMMIT');res.json({coins:updated.rows[0].coins});
+ }catch(e){await client.query('ROLLBACK');fail(res,e)}finally{client.release()}
+});
 app.post('/api/mod/ban',auth,async(req,res)=>{try{if(req.user.role!=='admin')return res.sendStatus(403);const id=Number(req.body.userId);if(!Number.isInteger(id)||id===req.user.id)return res.status(400).json({error:'Invalid target'});await pool.query('INSERT INTO bans(user_id,reason) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET reason=$2,expires_at=NULL',[id,safe(req.body.reason,240)]);for(const s of io.sockets.sockets.values())if(s.data.user?.id===id)s.disconnect(true);res.json({ok:true});}catch(e){fail(res,e);}});
 
 const staffRoles=['moderator','admin','owner'];
