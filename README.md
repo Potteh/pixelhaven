@@ -70,6 +70,12 @@ The game window has shortcuts for Rooms, Shop, Bag, Looks, Trade, Report, and St
 
 Trade invitations are cancelled if a player disconnects or changes rooms. The live trade state is in memory; restarting the app cancels unfinished live trades. Test with two separate accounts before enabling trades publicly.
 
+### Interactive food dispensers
+
+- **Ice Cream Machine:** Click a placed machine while standing within three tiles to receive vanilla, strawberry, or chocolate ice cream at random.
+- **Fridge:** Buy a refrigerator from the Novelty catalog (180 coins). Click a placed fridge within three tiles to receive a carrot, blackcurrant, or ice cream cone (equal category odds); ice cream flavor is randomized.
+- Players visibly hold the specific item, and other players see it via Socket.IO. Use **Drop Food** to clear it. Food is a temporary room interaction and does not enter inventory; changing rooms or disconnecting clears it. Dispensing has a 1.5-second cooldown.
+
 ### Operations
 
 ```bash
