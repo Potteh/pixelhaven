@@ -145,6 +145,7 @@ function clickTile(e){
  const dx=(px-500)/43,dy=(py-118)/24,x=Math.floor((dx+dy)/2+.5),y=Math.floor((dy-dx)/2+.5);
  if(x<0||y<0||x>9||y>9)return;
  const item=furniture.find(f=>f.x===x&&f.y===y);
+ if(!rotateMode){const hit=[...players.values()].reverse().find(p=>{const pt=window.pixelAvatarPosition?.(p.socketId)||tile(p.x,p.y);return Math.abs(px-pt.x)<=23&&py>=pt.y-90&&py<=pt.y+12});if(hit){window.pixelShowPlayer?.({id:hit.user.id,username:hit.user.username,role:hit.user.role});return}}
  if(rotateMode){
   if(furnitureMoveMode&&rotationTarget){
    socket.emit('furniture:move',{itemId:rotationTarget,x,y},a=>{if(a?.error)toast(a.error);else{toast('Furniture moved');rotationTarget=null;furnitureMoveMode=false;updateRotateControls()}});return;
