@@ -135,6 +135,41 @@ const areFriends=async(a,b)=>{const [lo,hi]=pair(a,b);return (await pool.query("
 const socialNotify=(id,event,data)=>{for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===id)socket.emit(event,data)};
 // Badge catalog, profile badges and administrator-managed grants.
 app.get('/api/badges',auth,async(req,res)=>{try{res.json((await pool.query('SELECT code,name,image_path FROM badge_definitions ORDER BY code')).rows)}catch(e){fail(res,e)}});
+// Public profiles expose safe display fields, never account secrets.
+app.get('/api/users/:id/profile',auth,async(req,res)=>{
+ const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Invalid player'});
+ try{
+  const profile=(await pool.query(`SELECT u.id,u.username,u.role,u.motto,u.created_at,
+   (SELECT count(*)::int FROM rooms WHERE owner_id=u.id) AS rooms_created,
+   (SELECT count(*)::int FROM social_friendships WHERE status='accepted' AND (user_low=u.id OR user_high=u.id)) AS friend_count
+   FROM users u WHERE u.id=$1`,[id])).rows[0];
+  if(!profile)return res.status(404).json({error:'Player not found'});
+  const [badges,equipped,achievements]=await Promise.all([
+   pool.query('SELECT d.code,d.name,d.image_path,b.granted_at FROM user_badges b JOIN badge_definitions d ON d.code=b.code WHERE b.user_id=$1 ORDER BY b.granted_at DESC',[id]),
+   pool.query('SELECT code,position FROM profile_equipped_badges WHERE user_id=$1 ORDER BY position',[id]),
+   pool.query('SELECT code,earned_at FROM profile_achievements WHERE user_id=$1 ORDER BY earned_at DESC',[id])
+  ]);
+  res.json({...profile,badges:badges.rows,equipped:equipped.rows,achievements:achievements.rows});
+ }catch(e){fail(res,e)}
+});
+app.patch('/api/me/profile',auth,async(req,res)=>{
+ const motto=String(req.body?.motto??'').trim();
+ if(motto.length>120||/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]/.test(motto))return res.status(400).json({error:'Motto must be 120 characters or fewer'});
+ try{await pool.query('UPDATE users SET motto=$1 WHERE id=$2',[motto,req.user.id]);res.json({ok:true,motto})}catch(e){fail(res,e)}
+});
+app.put('/api/me/equipped-badges',auth,async(req,res)=>{
+ const codes=req.body?.codes;
+ if(!Array.isArray(codes)||codes.length>3||codes.some(c=>typeof c!=='string'||!/^[A-Z0-9_]{2,16}$/.test(c))||new Set(codes).size!==codes.length)return res.status(400).json({error:'Choose up to three distinct earned badges'});
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const owned=(await client.query('SELECT code FROM user_badges WHERE user_id=$1 FOR UPDATE',[req.user.id])).rows.map(r=>r.code);
+  if(codes.some(c=>!owned.includes(c))){await client.query('ROLLBACK');return res.status(403).json({error:'You can only equip badges you own'})}
+  await client.query('DELETE FROM profile_equipped_badges WHERE user_id=$1',[req.user.id]);
+  for(let i=0;i<codes.length;i++)await client.query('INSERT INTO profile_equipped_badges(user_id,code,position) VALUES($1,$2,$3)',[req.user.id,codes[i],i+1]);
+  await client.query('COMMIT');res.json({ok:true,codes});
+ }catch(e){await client.query('ROLLBACK');fail(res,e)}finally{client.release()}
+});
 app.get('/api/users/:id/badges',auth,async(req,res)=>{const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Invalid player'});try{res.json((await pool.query('SELECT d.code,d.name,d.image_path,b.granted_at FROM user_badges b JOIN badge_definitions d ON d.code=b.code WHERE b.user_id=$1 ORDER BY b.granted_at DESC',[id])).rows)}catch(e){fail(res,e)}});
 app.post('/api/mod/badges/grant',auth,adminGuard,async(req,res)=>{
  const id=Number(req.body.userId),code=String(req.body.code||'').trim().toUpperCase();
