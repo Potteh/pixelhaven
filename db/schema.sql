@@ -11,3 +11,17 @@ ALTER TABLE rooms ADD COLUMN IF NOT EXISTS wall_color VARCHAR(16) NOT NULL DEFAU
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS floor_color VARCHAR(16) NOT NULL DEFAULT '#b3b8c8';
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS floor_pattern VARCHAR(16) NOT NULL DEFAULT 'checker';
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS layout VARCHAR(16) NOT NULL DEFAULT 'classic';
+
+-- Requests for entry to locked rooms; approvals expire and can be revoked by locking again.
+CREATE TABLE IF NOT EXISTS room_entry_requests (
+ id BIGSERIAL PRIMARY KEY,
+ room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ status VARCHAR(16) NOT NULL DEFAULT 'pending',
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ decided_at TIMESTAMPTZ,
+ UNIQUE(room_id,user_id),
+ CHECK(status IN ('pending','approved','denied'))
+);
+CREATE INDEX IF NOT EXISTS idx_room_entry_requests_owner ON room_entry_requests(room_id,status);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
