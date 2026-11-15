@@ -24,7 +24,7 @@ async function profiles(){
  }
  }catch(e){status(e.message)}
 }
-const kinds=['chair','sofa','table','plant','lamp','bed','arcade','club_sofa','royal_throne','ice_cream_machine','smoke_machine','christmas_tree','christmas_sofa','christmas_fireplace','snowman','gift_stack','candy_cane_lamp','festive_rug','gold_bar','nickel','quarter'];
+const kinds=['chair','sofa','table','plant','lamp','bed','arcade','club_sofa','royal_throne','ice_cream_machine','fridge','smoke_machine','christmas_tree','christmas_sofa','christmas_fireplace','snowman','gift_stack','candy_cane_lamp','festive_rug','gold_bar','nickel','quarter'];
 const sock=()=>typeof socket!=='undefined'&&socket?.connected?socket:null;
 const emit=(event,data)=>new Promise((resolve,reject)=>{const s=sock();if(!s)return reject(Error('Not connected'));s.emit(event,data,result=>result?.error?reject(Error(result.error)):resolve(result))});
 async function trade(){
