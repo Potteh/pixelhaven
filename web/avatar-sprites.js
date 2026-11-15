@@ -4,7 +4,7 @@
   'use strict';
   const atlas = new Map();
   const motion = new Map();
-  const PIXEL = 2;
+  const PIXEL = 1;
   const palette = {
     outline:'#202338', shadow:'#17233a', eye:'#23263a', mouth:'#a75f65',
     jeans:'#304665', shoes:'#171c30'
@@ -15,7 +15,7 @@
     const ch=k=>Math.max(0,Math.min(255,((n>>k)&255)+amount)).toString(16).padStart(2,'0');
     return '#'+ch(16)+ch(8)+ch(0);
   }
-  // Original hotel-pixel proportions: broad expressive head, compact torso,
+  // Modern social-hotel look: full-resolution rasterized source with smoother contours.\n  // Original hotel-pixel proportions: broad expressive head, compact torso,
   // outlined clothing and shoes, directional hair and four walk poses.
   function makeSprite(avatar,dir,frame){
     const skin=rgb(avatar.skin,'#e8ad7d'),shirt=rgb(avatar.shirt,'#4b86e8'),hair=rgb(avatar.hair,'#493323');
@@ -25,8 +25,8 @@
     const accessory=['none','glasses','cap','headphones'].includes(avatar.accessory)?avatar.accessory:'none';
     const key=[skin,shirt,hair,dir,frame,hairstyle,face,outfit,accessory].join(':');
     if(atlas.has(key))return atlas.get(key);
-    const c=document.createElement('canvas');c.width=40;c.height=56;
-    const g=c.getContext('2d');g.imageSmoothingEnabled=false;
+    const c=document.createElement('canvas');c.width=80;c.height=112;
+    const g=c.getContext('2d');g.imageSmoothingEnabled=true;g.scale(2,2);
     const rect=(x,y,w,h,col)=>{g.fillStyle=col;g.fillRect(Math.round(x),Math.round(y),w,h)};
     const back=dir==='back'||dir.startsWith('back-'),side=dir==='left'||dir==='right';
     const diag=dir.includes('-'),flip=dir==='left'||dir.endsWith('-left');
@@ -143,11 +143,11 @@
     const pos=tile(m.x,m.y),x=pos.x,y=pos.y;
     ctx.fillStyle='#10182a66';ctx.beginPath();ctx.ellipse(x,y+4,17,6,0,0,Math.PI*2);ctx.fill();
     const sprite=makeSprite(p.user.avatar||{},m.dir,frame);
-    ctx.save();ctx.imageSmoothingEnabled=false;
+    ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
     if(seated){
       // Upper body remains upright while knees fold forward on the seat.
       const skin=rgb(p.user.avatar?.skin,'#e8ad7d');
-      ctx.drawImage(sprite,0,0,40,40,Math.round(x-40),Math.round(y-96),80,80);
+      ctx.drawImage(sprite,0,0,80,80,Math.round(x-40),Math.round(y-96),80,80);
       ctx.fillStyle='#304665';ctx.fillRect(x-19,y-18,18,9);ctx.fillRect(x+1,y-18,18,9);
       ctx.fillStyle='#171c30';ctx.fillRect(x-21,y-10,19,7);ctx.fillRect(x+1,y-10,19,7);
     }else{
@@ -170,10 +170,10 @@
     ctx.fillStyle='#fff';ctx.fillText(name,x,y-110);
 
   };
-  window.pixelAvatarPreview=(g,avatar)=>{const sprite=makeSprite(avatar||{},'front',0);g.imageSmoothingEnabled=false;g.drawImage(sprite,10,6,100,140)};
+  window.pixelAvatarPreview=(g,avatar)=>{const sprite=makeSprite(avatar||{},'front',0);g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(sprite,10,6,100,140)};
   // Expose interpolated avatar feet for speech bubble placement.
   window.pixelAvatarPosition=id=>{const m=motion.get(id);return m?tile(m.x,m.y):null;};
   // Remove old interpolation entries after room transitions and disconnects.
   setInterval(()=>{if(typeof players==='undefined')return;for(const id of motion.keys())if(!players.has(id))motion.delete(id)},10000);
-  console.info('[Pixel Haven] v5.2 customizable hotel avatars loaded');
+  console.info('[Pixel Haven] v5.3 modern avatar rendering loaded');
 })();
