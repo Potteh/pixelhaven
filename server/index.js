@@ -20,7 +20,7 @@ app.use(helmet({contentSecurityPolicy:false}));app.use('/api/mod/badges/definiti
 app.use('/api',rateLimit({windowMs:15*60*1000,limit:120,standardHeaders:'draft-7',legacyHeaders:false}));
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 app.use(express.static(root));
-const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,fridge:180,vending_machine:210,teleporter:350,door:125,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25};
+const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,fridge:180,vending_machine:210,teleporter:350,door:125,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25,neon_arcade:650,golden_fountain:1200,autumn_throne:720,moon_lamp:180,bookshelf:150,aquarium:380,autumn_tree:220,pumpkin_lantern:90,star_rug:135};
 const safe=(s,max=240)=>String(s??'').trim().slice(0,max);
 const token=u=>jwt.sign({id:u.id},secret,{expiresIn:'7d'});
 const getUser=async id=>{const u=(await pool.query('SELECT id,username,coins,role,avatar,active_profile_id FROM users WHERE id=$1',[id])).rows[0];if(!u)return u;const p=u.active_profile_id?(await pool.query('SELECT id,name,avatar FROM game_profiles WHERE id=$1 AND user_id=$2',[u.active_profile_id,id])).rows[0]:null;u.profile=p||null;if(p?.avatar&&Object.keys(p.avatar).length)u.avatar=p.avatar;return u};
@@ -330,8 +330,25 @@ app.get('/api/mod/message-reports',auth,staffGuard,async(req,res)=>{
  try{res.json((await pool.query('SELECT mr.id,mr.reason,mr.created_at,m.body,m.sender_id,m.recipient_id,s.username sender,r.username recipient FROM social_message_reports mr JOIN social_messages m ON m.id=mr.message_id JOIN users s ON s.id=m.sender_id JOIN users r ON r.id=m.recipient_id ORDER BY mr.created_at DESC LIMIT 100')).rows)}catch(e){fail(res,e)}
 });
 app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
+const CATALOG_META={
+ neon_arcade:{name:'Neon Arcade',collection:'Limited Editions',rarity:'legendary',description:'A glowing arcade cabinet',limited:true},
+ golden_fountain:{name:'Golden Fountain',collection:'Limited Editions',rarity:'legendary',description:'A gleaming centerpiece',limited:true},
+ autumn_throne:{name:'Autumn Throne',collection:'Limited Editions',rarity:'epic',description:'A seasonal collector throne',limited:true},
+ moon_lamp:{name:'Moon Lamp',collection:'Modern Living',rarity:'rare',description:'Soft lunar lighting'},
+ bookshelf:{name:'Bookshelf',collection:'Modern Living',rarity:'common',description:'A cozy reading corner'},
+ aquarium:{name:'Aquarium',collection:'Modern Living',rarity:'rare',description:'An illuminated fish tank'},
+ autumn_tree:{name:'Autumn Tree',collection:'Autumn Festival',rarity:'uncommon',description:'Golden falling leaves'},
+ pumpkin_lantern:{name:'Pumpkin Lantern',collection:'Autumn Festival',rarity:'uncommon',description:'A glowing harvest decoration'},
+ star_rug:{name:'Star Rug',collection:'Modern Living',rarity:'uncommon',description:'A celestial floor accent'}
+};
+app.get('/api/catalog/details',auth,async(_req,res)=>{
+ try{const stock=(await pool.query('SELECT kind,remaining,initial_stock FROM catalog_limited_stock')).rows;const byKind=Object.fromEntries(stock.map(x=>[x.kind,x]));
+  res.json(Object.entries(CATALOG).map(([kind,price])=>({kind,price,name:CATALOG_META[kind]?.name||kind.replaceAll('_',' ').replace(/\\b\\w/g,c=>c.toUpperCase()),collection:CATALOG_META[kind]?.collection||'Classic Collection',rarity:CATALOG_META[kind]?.rarity||'common',description:CATALOG_META[kind]?.description||'Classic hotel furniture',limited:!!CATALOG_META[kind]?.limited,remaining:byKind[kind]?.remaining??null,initial_stock:byKind[kind]?.initial_stock??null}))));
+ }catch(e){fail(res,e)}
+});
+
 app.get('/api/inventory',auth,async(req,res)=>{try{res.json((await pool.query('SELECT kind,quantity FROM inventory WHERE user_id=$1',[req.user.id])).rows);}catch(e){fail(res,e);}});
-app.post('/api/buy',auth,async(req,res)=>{const kind=safe(req.body.kind,30),price=CATALOG[kind];if(!price)return res.status(400).json({error:'Unknown item'});const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 AND coins >= $1 RETURNING coins',[price,req.user.id]);if(!r.rowCount){await client.query('ROLLBACK');const balance=await client.query('SELECT coins FROM users WHERE id=$1',[req.user.id]);return res.status(400).json({error:'Not enough coins. Available: '+(balance.rows[0]?.coins??0)+'; item price: '+price});}await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[req.user.id,kind]);await client.query('COMMIT');res.json({coins:r.rows[0].coins});}catch(e){await client.query('ROLLBACK');fail(res,e);}finally{client.release();}});
+app.post('/api/buy',auth,async(req,res)=>{const kind=safe(req.body.kind,30),price=CATALOG[kind];if(!price)return res.status(400).json({error:'Unknown item'});const client=await pool.connect();try{await client.query('BEGIN');if(CATALOG_META[kind]?.limited){const stock=await client.query('UPDATE catalog_limited_stock SET remaining=remaining-1 WHERE kind=$1 AND remaining>0 RETURNING remaining',[kind]);if(!stock.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Limited edition sold out'})}}const r=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 AND coins >= $1 RETURNING coins',[price,req.user.id]);if(!r.rowCount){await client.query('ROLLBACK');const balance=await client.query('SELECT coins FROM users WHERE id=$1',[req.user.id]);return res.status(400).json({error:'Not enough coins. Available: '+(balance.rows[0]?.coins??0)+'; item price: '+price});}await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[req.user.id,kind]);await client.query('INSERT INTO catalog_purchases(user_id,kind,price) VALUES($1,$2,$3)',[req.user.id,kind,price]);await client.query('COMMIT');res.json({coins:r.rows[0].coins});}catch(e){await client.query('ROLLBACK');fail(res,e);}finally{client.release();}});
 const COIN_TOKENS={gold_bar:1000,nickel:5,quarter:25};
 app.post('/api/redeem',auth,async(req,res)=>{
  const kind=safe(req.body.kind,30),value=COIN_TOKENS[kind],quantity=Number(req.body.quantity||1);
