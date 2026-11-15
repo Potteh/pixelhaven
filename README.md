@@ -41,15 +41,25 @@ An original, Habbo-inspired isometric browser game. Includes account registratio
 
 For a temporary non-HTTPS test, set `BIND_IP=0.0.0.0` in `.env`, run `docker compose up -d`, then visit `http://YOUR_VPS_IP:3000`. Firewall-restrict access to trusted IPs; use HTTPS for production.
 
-### Admin setup
+### Owner, staff moderation, reports, and furniture trading
 
-After registering your own account, promote it manually from the VPS:
+After registering your own account, assign **owner** on the VPS (replace YOUR_USERNAME):
 
 ```bash
-docker compose exec db psql -U pixelhaven -d pixelhaven -c "UPDATE users SET role='admin' WHERE username='YOUR_USERNAME';"
+docker compose exec db psql -U pixelhaven -d pixelhaven -c "UPDATE users SET role='owner' WHERE lower(username)=lower('YOUR_USERNAME');"
 ```
 
-Authenticated admins can POST `/api/mod/ban` with JSON `{ "userId": 123, "reason": "..." }` and their Bearer token. This first release has an API for bans, not a graphical moderation console.
+Alternatively, set `PIXELHAVEN_OWNER_USERNAME=YOUR_USERNAME` in the **application container environment** before starting the app. The owner can appoint or demote admins and moderators in the **🛡️ Staff** panel. Do not give untrusted accounts owner access.
+
+- **Owner:** assign staff roles, warn, ban/unban, adjust credits, review reports and staff actions.
+- **Admin:** warn, ban/unban, adjust credits, review reports.
+- **Moderator:** warn players and review, pick up, resolve, or dismiss reports.
+- **Players:** file reports and propose item-for-item trades. Incoming trades must be accepted by the other player.
+- **Coin tokens:** buy nickels (5), quarters (25), or gold bars (1000) in the Coin Exchange shop. Trade them like furniture, or redeem them from inventory for their face value. They are in-game coins only, not real-world money.
+
+The game window has shortcuts for Rooms, Shop, Bag, Looks, Trade, Report, and Staff. Staff tools appear only for eligible roles. Moderation and trades are handled by authenticated server endpoints, with inventory transfers in a database transaction.
+
+**Important:** Keep a database backup before deploying, especially before enabling trading. Run only one application replica. Verify permission boundaries, concurrent trades, and account recovery in staging before opening the system to the public.
 
 ### Operations
 
