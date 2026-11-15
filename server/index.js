@@ -33,9 +33,9 @@ app.patch('/api/avatar',auth,async(req,res)=>{
  try{
   const a=req.body;
   const colors=['#e8ad7d','#a96b46','#f2cba5','#6d4535','#4b86e8','#ef7d82','#72c49a','#9b7de5','#493323','#1c2535','#f5ca59','#ffffff'];
-  const options={hairstyle:['short','spiky','long','buzz','sidepart'],face:['smile','neutral','happy','wink'],outfit:['tee','hoodie','jacket'],accessory:['none','glasses','cap','headphones']};
+  const options={hairstyle:['short','spiky','long','buzz','sidepart'],face:['smile','neutral','happy','wink'],outfit:['tee','hoodie','jacket','sweater','vest','dress'],accessory:['none','glasses','cap','headphones','beanie','sunglasses'],pants:['jeans','chinos','shorts','skirt'],shoes:['sneakers','boots','loafers'],pantsColor:colors,shoeColor:colors};
   if(!a||!['skin','shirt','hair'].every(k=>colors.includes(a[k]))||Object.entries(options).some(([k,values])=>a[k]!==undefined&&!values.includes(a[k])))return res.status(400).json({error:'Invalid avatar options'});
-  const avatar=Object.fromEntries([...['skin','shirt','hair'].map(k=>[k,a[k]]),...Object.entries(options).map(([k,values])=>[k,a[k]||values[0]])]);
+  const avatar=Object.fromEntries([...['skin','shirt','hair'].map(k=>[k,a[k]]),...Object.entries(options).map(([k,values])=>[k,a[k]||({pants:'jeans',shoes:'sneakers',pantsColor:'#4b86e8',shoeColor:'#1c2535'}[k]||values[0])])]);
   await pool.query('UPDATE users SET avatar=$1 WHERE id=$2',[JSON.stringify(avatar),req.user.id]);
   const user=await getUser(req.user.id);req.user.avatar=user.avatar;
   for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===req.user.id){
