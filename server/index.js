@@ -577,14 +577,25 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    const path=[];let key=goal;
    while(key!==start){const [px,py]=key.split(',').map(Number);path.unshift({x:px,y:py});key=parent.get(key);}
    let index=0;
-   const step=()=>{
-     if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
-     const next=path[index++];if(!next){stopWalking();return;}
-     positions.set(s.id,next);
-     io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:next.x,y:next.y});
-     if(index>=path.length)stopWalking();
+   let stepping=false;
+   const step=async()=>{
+     if(stepping)return;
+     stepping=true;
+     try{
+       if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
+       const next=path[index];if(!next){stopWalking();return;}
+       // Check every step against the live room state, not just the original route.
+       const occupied=await pool.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3 LIMIT 1',[roomId,next.x,next.y]);
+       if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
+       if(occupied.rowCount){stopWalking();return;}
+       index++;
+       positions.set(s.id,next);
+       io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:next.x,y:next.y});
+       if(index>=path.length)stopWalking();
+     }catch(e){console.error('Walking collision check failed',e);stopWalking();}
+     finally{stepping=false;}
    };
-   if(path.length){walkTimer=setInterval(step,240);step();}
+   if(path.length){walkTimer=setInterval(step,240);void step();}
  });
  s.on('disconnecting',stopWalking);
  s.on('room:join',stopWalking);
