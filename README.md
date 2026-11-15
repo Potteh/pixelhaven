@@ -109,3 +109,10 @@ docker compose exec -T db pg_dump -U pixelhaven pixelhaven > pixelhaven-backup.s
 - Coin balances start at 500. There is no real-money billing or currency earning loop.
 - Run one application replica only: room presence currently lives in process memory. Multi-instance scaling requires a Socket.IO Redis adapter and shared presence.
 - Add automated tests, monitoring, backups, stronger production rate limiting, CSRF considerations for future cookie auth, and a CDN if traffic grows.
+
+### Room-O-Matic 2.0 and owner moderation
+
+Create a room with customizable wall and floor colors, flooring patterns (checker, solid, wood, tiles), and room styles (classic, lounge, studio). The isometric play grid remains 10 × 10; styles alter decoration and flooring rather than the room's physical dimensions. Room owners can use **🎨 Room Settings** above the room canvas to change the room name, description, appearance, and public/private status. Updates persist in PostgreSQL and broadcast to connected guests.
+
+Room owners see **Kick** next to other guests in the room's player list. Kicking removes all selected socket's presence immediately and prevents that account from rejoining the same room for 10 minutes (in-memory cooldown, reset on server restart). Guests receive an explanation and return to the hotel lobby. Room ownership is verified on the server; players cannot kick the room owner. Changing a public room to private removes guests who are not the owner.
+
