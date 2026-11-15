@@ -133,17 +133,45 @@ async function staffChatLogs(){
  await load(false);
 }
 async function staffBadges(){
- const section=el('section');section.append(el('h3','🏅 Player Badges'));
- const p=playerSearch('Select player to award a badge');
+ const section=el('section');section.className='communityCase';section.append(el('h3','🏅 Badge Manager'));
+ const message=el('p');message.className='communityStatus';
+ const p=playerSearch('Select player to award or revoke a badge');
  const codes=el('select'),list=el('div');list.className='communityActions';
- section.append(p.wrap,field('Badge code',codes),list);
- try{const badges=await api('/badges');for(const b of badges){const o=el('option',b.code+' — '+b.name);o.value=b.code;codes.append(o)}}catch(e){section.append(el('p',e.message))}
+ const gallery=el('div');gallery.className='playerBadges';
+ section.append(p.wrap,field('Badge code',codes),list,message,el('h4','Badge Library'),gallery);
+ async function refresh(){
+  codes.replaceChildren();gallery.replaceChildren();
+  const badges=await api('/badges');
+  for(const b of badges){
+   const o=el('option',b.code+' — '+b.name);o.value=b.code;codes.append(o);
+   const item=el('div');item.className='playerBadge';
+   const img=el('img');img.src=b.image_path;img.alt=b.name;img.onerror=()=>{img.hidden=true;item.append(el('strong',b.code))};
+   item.append(img,el('small',b.name+' ('+b.code+')'));gallery.append(item);
+  }
+ }
  async function act(action){
-  try{if(!p.select.value)throw Error('Select a player first');await api('/mod/badges/'+action,'POST',{userId:Number(p.select.value),code:codes.value});section.append(el('p',action==='grant'?'Badge granted':'Badge revoked'))}
-  catch(e){section.append(el('p',e.message))}
+  try{if(!p.select.value)throw Error('Select a player first');if(!codes.value)throw Error('Create a badge first');await api('/mod/badges/'+action,'POST',{userId:Number(p.select.value),code:codes.value});message.textContent=action==='grant'?'Badge awarded':'Badge revoked'}
+  catch(e){message.textContent=e.message}
  }
  list.append(button('Award Badge',()=>act('grant')),button('Revoke Badge',()=>act('revoke')));
- body.append(section);
+ const create=el('div');create.className='badgeCreateForm';
+ create.append(el('h4','Create a Custom Badge'));
+ const code=input('text','Code (e.g. VIP)');code.maxLength=16;
+ const name=input('text','Badge name');name.maxLength=80;
+ const file=input('file');file.accept='image/png,image/gif';
+ create.append(field('Badge Code',code),field('Display Name',name),field('PNG or GIF (256 KB max)',file));
+ create.append(button('Upload & Create Badge',async()=>{
+  try{
+   const selected=file.files?.[0];if(!selected)throw Error('Choose a PNG or GIF image');
+   if(selected.size>262144)throw Error('Image must be 256 KB or smaller');
+   if(!['image/png','image/gif'].includes(selected.type))throw Error('Only PNG and GIF files are supported');
+   const image=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read image'));reader.readAsDataURL(selected)});
+   await api('/mod/badges/definitions','POST',{code:code.value.trim().toUpperCase(),name:name.value,image});
+   message.textContent='Badge '+code.value.toUpperCase()+' created';code.value='';name.value='';file.value='';await refresh();
+  }catch(e){message.textContent=e.message}
+ }));
+ section.append(create);body.append(section);
+ try{await refresh()}catch(e){message.textContent=e.message}
 }
 async function staffMessageReports(){
  const section=el('section');section.append(el('h3','✉️ Reported Private Messages'));
@@ -211,8 +239,22 @@ window.pixelShowPlayer=async player=>{
     check.onchange=()=>{if(check.checked){if(selected.length>=3){check.checked=false;notice.textContent='Maximum three featured badges';return}selected.push(badge.code)}else{const i=selected.indexOf(badge.code);if(i>=0)selected.splice(i,1)}};label.append(check,document.createTextNode(' '+badge.name+' ('+badge.code+')'));picker.append(label)}
    panel.append(button('Save Featured Badges',async()=>{try{await api('/me/equipped-badges','PUT',{codes:selected});notice.textContent='Featured badges saved';await window.pixelShowPlayer(player)}catch(e){notice.textContent=e.message}}));
   }
+  if(self&&profile.new_achievements?.length){
+   const names=await api('/achievements').catch(()=>[]);
+   const unlocked=profile.new_achievements.map(code=>names.find(a=>a.code===code)?.name||code);
+   notice.textContent='🏆 Achievement unlocked: '+unlocked.join(', ');
+  }
   panel.append(el('h4','🏆 Achievements'));
   const achievements=el('div');panel.append(achievements);
+  if(self&&profile.achievement_progress){
+   const progress=el('div');progress.className='achievementProgress';
+   for(const a of profile.achievement_progress){
+    const row=el('div');row.className='achievementProgressRow';
+    row.append(el('strong',(a.unlocked?'✓ ':'')+a.name),el('small',a.description+' · '+a.current+'/'+a.target));
+    const bar=el('progress');bar.max=a.target;bar.value=a.current;row.append(bar);progress.append(row);
+   }
+   achievements.append(progress);
+  }
   if(!profile.achievements.length)achievements.append(el('p','No achievements unlocked yet'));
   else for(const a of profile.achievements)achievements.append(el('p','🏆 '+a.code.replaceAll('_',' ')+' · '+new Date(a.earned_at).toLocaleDateString()));
   if(!self){
