@@ -155,3 +155,32 @@ main{grid-template-columns:230px minmax(0,1fr) 205px;max-width:1900px}
 .roomomaticCreate{justify-self:start}
 body.hotelViewActive{overflow:hidden}
 @media(max-width:650px){.hotelView{padding:5px}.hotelViewShell{max-height:98vh}.hotelViewHeader{padding:12px}.hotelViewScene{height:150px}.hotelViewBuilding{transform:scale(.75);transform-origin:bottom center}.hotelViewNav{padding:9px}.hotelViewNav button{font-size:11px;padding:8px}.hotelViewContent{padding:11px}.hotelRoomSearch{display:block}.hotelRoomSearch input{max-width:none;margin-top:10px}.hotelRoomThumbnail{width:48px;height:55px}.hotelRoomCard{gap:7px}.hotelEnter{padding:8px 6px;font-size:10px}}
+
+/* v6.3 in-room shortcuts and retro blue moderation windows */
+.canvasWrap .gameDock{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:flex;gap:5px;padding:6px;background:#102b48e8;border:2px solid #8dbad2;border-radius:11px;box-shadow:0 4px 16px #0008;z-index:7;max-width:calc(100% - 210px);overflow-x:auto}
+.gameDock button{min-width:48px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:19px;padding:5px 7px;background:linear-gradient(#4c93b8,#2e668b);color:#fff;border:1px solid #a6d7eb;box-shadow:inset 0 1px #fff5}
+.gameDock button span{font-size:9px;font-weight:800}
+.gameDock button[hidden]{display:none}
+.communityPanel[hidden]{display:none!important}
+.communityPanel{position:fixed;z-index:45;top:8vh;left:50%;transform:translateX(-50%);width:min(760px,95vw);max-height:84vh;overflow:auto;padding:0;background:#408db2;border:3px solid #1b506b;border-radius:10px;box-shadow:0 0 0 100vmax #091625aa,0 25px 65px #0009;color:#132c40}
+.communityPanel .communityHead{height:auto;display:flex;justify-content:space-between;align-items:center;padding:11px 15px;background:linear-gradient(#72b3d0,#357c9f);color:white;border-bottom:2px solid #1d5472}
+.communityHead strong{font-size:16px;text-shadow:0 1px #2d6484}
+.communityHead button{background:#275b79;color:white;padding:4px 10px}
+.communityTabs{display:flex;gap:5px;padding:10px 12px 0;flex-wrap:wrap}
+.communityTabs button{background:#b2d8e8;border:1px solid #2e6481;box-shadow:none;color:#173e56;font-size:12px}
+.communityTabs button.active{background:white;color:#153d56}
+.communityTabs button[hidden]{display:none}
+#communityBody{background:#eaf5fa;margin:0 12px 12px;padding:15px;border:2px solid #2c6a8b;border-radius:8px;max-height:62vh;overflow:auto}
+#communityBody h3{color:#1e5575;font-size:17px;margin:8px 0}
+#communityBody h4{color:#286384;margin:9px 0}
+#communityBody p{color:#344d60;font-size:12px}
+#communityBody label{display:block;color:#234b64;font-size:12px;font-weight:800;margin:9px 0}
+#communityBody input,#communityBody select,#communityBody textarea{display:block;width:100%;margin:6px 0;padding:9px;background:white;color:#193b52;border:1px solid #6b9bb4;border-radius:5px}
+#communityBody button{background:linear-gradient(#fefefe,#c6e0ec);color:#1c4560;border:1px solid #4d819a;box-shadow:none;margin:4px;padding:7px 11px;font-size:12px}
+#communityBody .communityCase{padding:12px;margin:9px 0;background:#fff;border:1px solid #a1c6d8;border-radius:6px}
+#communityBody .communityCase strong{color:#244c68}
+#communityBody .communityActions{display:flex;gap:4px;flex-wrap:wrap}
+#communityBody .tradeOffer{background:#d9eaf3;padding:10px;margin:9px 0;border:1px solid #a3c7da;border-radius:7px}
+#communityBody .tradeLine{display:grid;grid-template-columns:1fr 75px auto;gap:5px;align-items:center}
+#communityBody .communityStatus{background:#c4e2ef;padding:9px;border-left:3px solid #347ea2}
+@media(max-width:700px){.canvasWrap .gameDock{top:5px;left:5px;transform:none;max-width:calc(100% - 145px);padding:3px}.gameDock button{min-width:36px;font-size:15px;padding:4px}.gameDock button span{font-size:8px}.communityPanel{top:3vh;max-height:94vh}#communityBody{max-height:72vh;padding:9px}}
