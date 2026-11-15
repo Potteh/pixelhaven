@@ -130,27 +130,42 @@ function renderCatalog(){for(const [kind,price] of Object.entries(catalog)){cons
 function identity(){$('#identity').textContent=me.username+' · 🪙 '+me.coins}
 function avatarEditor(){
  const editor=$('#avatarEditor');editor.replaceChildren();
- const config=[
-  ['skin','Skin tone',colors],['shirt','Clothing color',colors],['hair','Hair color',colors],
-  ['hairstyle','Hairstyle',['short','spiky','long','buzz','sidepart']],
-  ['face','Expression',['smile','neutral','happy','wink']],
-  ['outfit','Clothing style',['tee','hoodie','jacket']],
-  ['accessory','Accessory',['none','glasses','cap','headphones']]
+ const groups=[
+ ['Appearance',[['skin','Skin tone',colors],['hair','Hair color',colors],['hairstyle','Hairstyle',['short','spiky','long','buzz','sidepart']],['face','Expression',['smile','neutral','happy','wink']]]],
+ ['Outfit',[['outfit','Top style',['tee','hoodie','jacket','sweater','vest','dress']],['shirt','Top color',colors],['pants','Bottoms',['jeans','chinos','shorts','skirt']],['pantsColor','Bottom color',colors],['shoes','Footwear',['sneakers','boots','loafers']],['shoeColor','Shoe color',colors]]],
+ ['Accessories',[['accessory','Accessory',['none','glasses','sunglasses','cap','beanie','headphones']]]]
  ];
+ let draft={...me.avatar},direction=0,busy=false;
+ const views=['front','right','back','left'];
  const preview=document.createElement('canvas');preview.width=120;preview.height=152;preview.className='avatarPreview';
- const redraw=()=>{const g=preview.getContext('2d');g.clearRect(0,0,120,152);if(window.pixelAvatarPreview)window.pixelAvatarPreview(g,me.avatar)};
- editor.append(preview);
- for(const [key,name,values] of config){
-  const label=document.createElement('label');label.textContent=name;
-  const sel=document.createElement('select');
-  for(const v of values){const o=document.createElement('option');o.value=v;o.textContent=v.startsWith('#')?v:v.replace(/(^|\s)\w/g,m=>m.toUpperCase());if(v.startsWith('#'))o.style.background=v;sel.append(o)}
-  sel.value=me.avatar?.[key]||values[0];
-  sel.onchange=async()=>{
-   const old=me.avatar;
-   try{me=await api('/avatar','PATCH',{...me.avatar,[key]:sel.value});redraw();toast('Avatar updated for everyone')}
-   catch(e){sel.value=old[key]||values[0];toast(e.message)}
-  };
-  label.append(sel);editor.append(label);
+ const redraw=()=>{const g=preview.getContext('2d');g.clearRect(0,0,120,152);window.pixelAvatarPreview?.(g,draft,views[direction])};
+ const viewBar=document.createElement('div');viewBar.className='wardrobeViews';
+ const viewLabel=document.createElement('span');viewLabel.textContent='Front';
+ const backBtn=document.createElement('button');backBtn.type='button';backBtn.textContent='◀';
+ const nextBtn=document.createElement('button');nextBtn.type='button';nextBtn.textContent='▶';
+ const turn=n=>{direction=(direction+n+4)%4;viewLabel.textContent=views[direction].toUpperCase();redraw()};
+ backBtn.onclick=()=>turn(-1);nextBtn.onclick=()=>turn(1);viewBar.append(backBtn,viewLabel,nextBtn);
+ const status=document.createElement('p');status.className='wardrobeStatus';status.textContent='Changes save automatically';
+ editor.append(preview,viewBar,status);
+ const selectors=[];
+ for(const [group,fields] of groups){
+  const heading=document.createElement('h4');heading.className='wardrobeHeading';heading.textContent=group;editor.append(heading);
+  const wrap=document.createElement('div');wrap.className='wardrobeGrid';
+  for(const [key,name,values] of fields){
+   const label=document.createElement('label');label.textContent=name;const sel=document.createElement('select');sel.dataset.field=key;
+   for(const v of values){const option=document.createElement('option');option.value=v;option.textContent=v.startsWith('#')?v:v.replace(/(^|\\s)\\w/g,m=>m.toUpperCase());if(v.startsWith('#'))option.style.background=v;sel.append(option)}
+   sel.value=draft[key]||({pants:'jeans',pantsColor:'#4b86e8',shoes:'sneakers',shoeColor:'#1c2535'}[key]||values[0]);
+   draft[key]=sel.value;selectors.push(sel);
+   sel.onchange=async()=>{
+    if(busy)return;
+    const before={...draft};draft[key]=sel.value;redraw();busy=true;selectors.forEach(x=>x.disabled=true);status.textContent='Saving…';
+    try{me=await api('/avatar','PATCH',draft);draft={...me.avatar};status.textContent='✓ Saved for everyone'}
+    catch(e){draft=before;sel.value=before[key];redraw();status.textContent='Could not save';toast(e.message)}
+    finally{busy=false;selectors.forEach(x=>x.disabled=false)}
+   };
+   label.append(sel);wrap.append(label);
+  }
+  editor.append(wrap);
  }
  redraw();
 }
