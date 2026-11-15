@@ -198,6 +198,97 @@ function art(kind){
   for(const x of [32,40,48,80,88,96])a+=line('M'+x+' 84 v7','#e2edf3',1);
   break;
  }
+
+ case 'fridge':
+ case 'vending_machine':
+ case 'neon_arcade':{
+  const arcade=kind==='neon_arcade',vend=kind==='vending_machine';
+  a+=path('M27 30 L83 19 L104 33 L104 107 L48 117 L27 102 Z','#33465e','#253347',2.5);
+  a+=path('M27 30 L83 19 L104 33 L48 44 Z',arcade?'#e55bc4':'#dce7ed');
+  a+=path('M48 44 L104 33 L104 107 L48 117 Z',arcade?'#574078':vend?'#466b89':'#c7d6df');
+  a+=path('M27 30 L48 44 L48 117 L27 102 Z',arcade?'#29304e':'#8ca9b9');
+  if(arcade||vend){
+   a+=path('M55 49 L96 42 L96 80 L55 87 Z','#18283d','#a9d2ed',2);
+   a+=path('M59 54 L92 48 L92 75 L59 81 Z',arcade?'#6d52ba':'#81c9d7');
+   a+=ellipse(76,65,9,8,arcade?'#ffdc76':'#f5e1c1');
+   a+=line('M61 92 L91 86',arcade?'#ff8cde':'#e6eff4',3);
+   a+=ellipse(69,98,3,3,'#f35c79')+ellipse(83,95,3,3,'#7de5d1');
+  }else{
+   a+=line('M55 47 L55 110','#f5ffff',2);
+   a+=path('M89 68 L94 67 L94 81 L89 82 Z','#748da3');
+   a+=line('M53 88 L99 79','#a2b7c7',1);
+  }
+  break;
+ }
+ case 'door':
+ case 'teleporter':{
+  const portal=kind==='teleporter';
+  a+=path('M33 111 L33 24 L84 14 L99 25 L99 108 L84 117 Z',portal?'#3b5c7a':'#8e634a','#35455e',3);
+  a+=path('M43 34 L85 26 L85 105 L43 111 Z',portal?'#142b51':'#b98861','#d3af7c',2);
+  if(portal){a+=ellipse(65,69,17,34,'#58d6e3')+ellipse(65,69,11,28,'#9e79ed');a+=line('M54 39 Q65 30 76 39','#d4f9ff',3)}
+  else{a+=path('M50 44 L78 38 L78 65 L50 70 Z','#d4a77a');a+=ellipse(77,80,3,4,'#ffe2a2')}
+  break;
+ }
+ case 'golden_fountain':{
+  a+=path('M17 89 L64 106 L111 89 L111 104 L64 121 L17 104 Z','#a87a30','#705121',2);
+  a+=path('M17 89 L64 72 L111 89 L64 106 Z','#f6d778','#a97824',2);
+  a+=ellipse(64,88,36,12,'#6fc8d9');
+  a+=path('M59 53 H69 L75 90 H53 Z','#e2b44d','#936927',2);
+  a+=ellipse(64,52,24,8,'#ffe49a')+ellipse(64,49,18,5,'#6ecadf');
+  a+=path('M61 47 Q45 25 64 15 Q83 25 67 47','none','#9cecff',5);
+  a+=ellipse(64,16,5,6,'#f9eab1');break;
+ }
+ case 'autumn_throne':{
+  a+=path('M37 85 L36 113 L48 113 L50 86 M82 85 L84 113 L95 113 L91 85','#67402d');
+  a+=path('M30 29 Q64 5 98 29 L96 87 Q64 105 32 87 Z','#8d502e','#efb35d',3);
+  a+=path('M42 35 Q64 21 86 35 L85 79 Q64 90 43 79 Z','#9c433d','#f3c77a',2);
+  a+=path('M29 79 Q64 68 100 79 L96 99 Q64 111 32 99 Z','#bb7540','#f6d28b',2);
+  for(const [x,y] of [[35,25],[65,16],[92,26]])a+=ellipse(x,y,6,8,'#e5a544');
+  a+=line('M43 88 Q64 99 88 88','#ffe2a0',2);break;
+ }
+ case 'moon_lamp':{
+  a+=ellipse(64,110,23,7,'#4a637d');
+  a+=path('M60 77 H68 V110 H60 Z','#a4b5c7');
+  a+=path('M77 19 Q44 23 47 54 Q50 83 81 80 Q56 93 41 72 Q23 48 42 26 Q58 11 77 19 Z','#fff1bf','#a8b7ce',2);
+  a+=ellipse(42,42,3,3,'#c6c7b4')+ellipse(51,62,4,3,'#d6d1b9');break;
+ }
+ case 'bookshelf':{
+  a+=path('M25 33 L84 18 L106 32 L106 108 L47 123 L25 109 Z','#6c4937','#392e32',2);
+  a+=path('M47 45 L100 32 L100 103 L47 116 Z','#c79562');
+  for(const y of [53,75,97]){a+=line('M49 '+y+' L98 '+(y-12),'#6d4633',5);
+   for(let j=0;j<5;j++){const x=52+j*9;a+=path('M'+x+' '+(y-19-j*2)+' l6 -2 v14 l-6 2 Z',['#d65e63','#5d9fb3','#e0b55c','#7b8a68','#8b72ae'][j])}}
+  a+=path('M25 33 L47 45 L47 116 L25 104 Z','#80563e');break;
+ }
+ case 'aquarium':{
+  a+=path('M25 42 L83 26 L105 40 L105 102 L47 117 L25 102 Z','#526a83','#293d52',2);
+  a+=path('M47 49 L100 37 L100 96 L47 109 Z','#70c5d8','#3b7f9e',2);
+  a+=path('M27 43 L47 49 L47 109 L27 100 Z','#4289a9');
+  a+=path('M47 93 L100 80 L100 97 L47 109 Z','#d5b87d');
+  a+=ellipse(72,66,11,5,'#f4aa59')+path('M61 66 L53 60 L53 72 Z','#e38b4c');
+  a+=ellipse(77,64,2,2,'#22354a');
+  a+=path('M90 91 Q78 71 91 59','none','#4d9b7b',3);
+  for(const [x,y] of [[59,52],[84,44],[67,82]])a+=ellipse(x,y,2,3,'#d7f8ff');break;
+ }
+ case 'autumn_tree':{
+  a+=path('M59 71 L53 111 L71 111 L67 68 Z','#79513b');
+  for(const [x,y,rx,ry,c] of [[53,45,27,20,'#d88a3d'],[76,42,27,22,'#e6ae50'],[64,23,24,19,'#ba613d'],[43,62,19,16,'#c66c38'],[84,62,20,16,'#edba5c']])a+=ellipse(x,y,rx,ry,c);
+  a+=line('M64 77 L64 51 M64 66 L47 50 M64 59 L80 43','#80513b',3);
+  break;
+ }
+ case 'pumpkin_lantern':{
+  a+=ellipse(64,83,35,27,'#b76a2d');
+  a+=ellipse(64,79,30,25,'#ed9340');
+  a+=line('M64 56 Q56 78 64 104 M49 61 Q40 80 49 98 M79 61 Q88 80 79 98','#b9682e',2);
+  a+=path('M61 55 L61 47 L69 44 L70 56 Z','#64824c');
+  a+=path('M45 76 L54 70 L57 81 Z M72 81 L75 70 L85 76 Z M56 88 Q64 99 73 88 Z','#513d31','none');
+  break;
+ }
+ case 'star_rug':{
+  a+=path('M10 82 L64 51 L118 82 L64 113 Z','#3e557f','#253c65',2);
+  a+=path('M23 82 L64 59 L105 82 L64 105 Z','#6377a4','#e0d6aa',2);
+  a+=path('M64 64 L70 76 L84 78 L74 87 L77 100 L64 93 L51 100 L54 87 L44 78 L58 76 Z','#ffe5a2','#bba36e',1.5);
+  break;
+ }
  default:
   a+=path('M25 65 L64 42 L104 65 L64 89 Z','url(#wood)')+path('M25 65 L64 89 L64 107 L25 83 Z','#936748')+path('M64 89 L104 65 L104 83 L64 107 Z','#b6845b');
  }
