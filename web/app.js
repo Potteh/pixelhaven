@@ -3,7 +3,7 @@ let token=localStorage.getItem('pixel_token'),me=null,socket=null,room=null,play
 const colors=['#e8ad7d','#a96b46','#f2cba5','#6d4535','#4b86e8','#ef7d82','#72c49a','#9b7de5','#493323','#1c2535','#f5ca59','#ffffff'];
 const emoji={chair:'🪑',sofa:'🛋️',table:'🪵',plant:'🪴',lamp:'💡',bed:'🛏️',arcade:'🕹️',club_sofa:'🛋️',royal_throne:'👑',ice_cream_machine:'🍦',fridge:'🧊',vending_machine:'🥤',teleporter:'🌀',door:'🚪',smoke_machine:'🌫️',christmas_tree:'🎄',christmas_sofa:'🛋️',christmas_fireplace:'🔥',snowman:'⛄',gift_stack:'🎁',candy_cane_lamp:'🍬',festive_rug:'❄️',gold_bar:'🪙',nickel:'🥉',quarter:'🪙'};
 function toast(s){$('#toast').textContent=s;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',3200)}
-async function api(url,method='GET',data){const r=await fetch('/api'+url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data?JSON.stringify(data):undefined});const j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}
+async function api(url,method='GET',data){const r=await fetch('/api'+url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data?JSON.stringify(data):undefined});const j=await r.json();if(!r.ok){const error=Error(j.error||'Request failed');error.status=r.status;throw error;}return j}
 function tile(x,y,z=0){return {x:500+(x-y)*43,y:118+(x+y)*24-z}}
 function diamond(x,y,fill,stroke='#ffffff22'){const p=tile(x,y);ctx.beginPath();ctx.moveTo(p.x,p.y-24);ctx.lineTo(p.x+43,p.y);ctx.lineTo(p.x,p.y+24);ctx.lineTo(p.x-43,p.y);ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=stroke;ctx.stroke()}
 // Pixel Haven visual engine v2: original vector-pixel assets, depth-sorted entities.
@@ -282,8 +282,29 @@ function avatarEditor(){
  }
  redraw();
 }
-async function start(){try{me=await api('/me');window.pixelHotelUserId=me.id;$('#authOverlay').style.display='none';identity();avatarEditor();catalog=await api('/catalog');renderCatalog();await Promise.all([loadRooms(),loadInventory()]);connect()}catch{localStorage.removeItem('pixel_token');$('#authOverlay').style.display='grid'}}
-$('#authForm').onsubmit=async e=>{e.preventDefault();try{const r=await api(authRegister?'/register':'/login','POST',{username:$('#username').value,password:$('#password').value});token=r.token;localStorage.setItem('pixel_token',token);me=r.user;location.reload()}catch(e){$('#authError').textContent=e.message}};
+async function start(){
+ if(!token){$('#authOverlay').style.display='grid';return}
+ try{
+  me=await api('/me');
+ }catch(e){
+  // A network or server failure is not proof that the saved session is invalid.
+  if(e.status===401||e.status===403){token=null;localStorage.removeItem('pixel_token');$('#authOverlay').style.display='grid';$('#authError').textContent='Your session expired. Please log in again.'}
+  else{$('#authOverlay').style.display='grid';$('#authError').textContent='Could not connect to Pixel Haven: '+e.message+'. Your session is still saved.'}
+  return;
+ }
+ window.pixelHotelUserId=me.id;
+ $('#authOverlay').style.display='none';
+ try{
+  identity();avatarEditor();catalog=await api('/catalog');renderCatalog();
+  await Promise.all([loadRooms(),loadInventory()]);
+  connect();
+ }catch(e){
+  console.error('Pixel Haven startup failed:',e);
+  toast('Some game features could not load: '+e.message);
+  try{if(!socket)connect()}catch(err){console.error('Socket startup failed:',err)}
+ }
+}
+$('#authForm').onsubmit=async e=>{e.preventDefault();try{const r=await api(authRegister?'/register':'/login','POST',{username:$('#username').value,password:$('#password').value});token=r.token;localStorage.setItem('pixel_token',token);me=r.user;$('#authError').textContent='';await start()}catch(e){$('#authError').textContent=e.message}};
 $('#authToggle').onclick=()=>{authRegister=!authRegister;$('#authTitle').textContent=authRegister?'Create account':'Welcome back';$('#authSubmit').textContent=authRegister?'Sign up':'Log in';$('#authToggle').textContent=authRegister?'Already registered? Log in':'New here? Create an account'};
 $('#chatForm').onsubmit=e=>{e.preventDefault();const input=$('#chatInput'),message=input.value.trim();if(!message||!socket?.connected)return;input.disabled=true;socket.emit('chat:send',message,a=>{input.disabled=false;if(a?.error){toast(a.error)}else{input.value=''}input.focus()})};
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.repeat||e.ctrlKey||e.altKey||e.metaKey||e.shiftKey)return;const target=e.target;if(target?.closest?.('input,textarea,select,button,[contenteditable="true"],form'))return;if(document.getElementById('authOverlay')?.style.display!=='none')return;if(!document.getElementById('hotelHub')?.hidden)return;e.preventDefault();$('#chatInput').focus()});
