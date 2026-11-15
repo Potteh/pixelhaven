@@ -106,3 +106,52 @@ main{grid-template-columns:230px minmax(0,1fr) 205px;max-width:1900px}
 .catalogPrice{color:#f7ce7c;font-size:13px;font-weight:900}
 .catalogCard button{margin-top:auto}
 @media(max-width:700px){.shopWindow{inset:12px;padding:10px}.catalogGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalogHero strong{font-size:23px}.catalogTabs button{font-size:11px;padding:8px}}
+
+/* v6.1 Pixel Haven Hotel View & Room-O-Matic */
+.navigatorLauncher p{font-size:12px;line-height:1.5;color:#d5d9e4}
+#navigatorOpen{width:100%;background:linear-gradient(#ffe6ad,#dda252);font-size:13px}
+.hotelView[hidden]{display:none!important}
+.hotelView{position:fixed;inset:0;z-index:30;overflow:auto;display:grid;place-items:center;padding:22px;background:#081222d9;backdrop-filter:blur(8px)}
+.hotelViewShell{width:min(960px,100%);max-height:94vh;overflow:auto;background:linear-gradient(155deg,#2a4566,#17283e 75%);border:3px solid #d8ad69;border-radius:20px;box-shadow:0 30px 95px #000c;color:#f6ead6}
+.hotelViewHeader{display:flex;align-items:center;justify-content:space-between;padding:19px 24px;background:linear-gradient(90deg,#2c4d71,#1b2d49);border-bottom:2px solid #b38b58}
+.hotelViewEyebrow{font-size:10px;letter-spacing:2.5px;color:#ffd28b;font-weight:800}
+.hotelViewHeader h2{font:700 29px Georgia,serif;color:#fff0c5;margin:4px 0}
+#hotelViewClose{background:#694457;color:#fff4e1;box-shadow:none;border:1px solid #b78379}
+.hotelViewScene{height:215px;position:relative;overflow:hidden;background:linear-gradient(#80bdd8 0%,#b7d9dd 63%,#81a69b 64%,#4d826f 100%)}
+.hotelViewSun{position:absolute;top:20px;right:18%;width:58px;height:58px;border-radius:50%;background:#fff1bd;box-shadow:0 0 45px #fff2bd}
+.hotelViewBuilding{position:absolute;width:290px;height:190px;left:calc(50% - 145px);bottom:0;background:linear-gradient(90deg,#c0a58a,#f1d4ae 45%,#d6b793);border:5px solid #6e7888;border-bottom:0;box-shadow:12px 9px 0 #58747d}
+.hotelViewRoof{height:31px;background:#344a65;border-bottom:4px solid #dfb86c;color:#ffe7aa;text-align:center;font-size:15px;font-weight:900;letter-spacing:1.5px;padding:5px}
+.hotelViewWindows{height:90px;margin:10px 19px;background:repeating-linear-gradient(90deg,#a7d4e4 0 26px,#4e7589 26px 32px,#e2c3a1 32px 54px);border-top:8px solid #4c7188;border-bottom:8px solid #4c7188}
+.hotelViewEntrance{position:absolute;bottom:0;left:105px;width:80px;height:52px;background:#405b70;border:5px solid #f5d391;border-bottom:0;text-align:center;padding-top:9px;font-size:10px;font-weight:900;color:#ffe3a1}
+.hotelViewGround{position:absolute;bottom:0;left:0;width:100%;height:12px;background:#b6c2a5}
+.hotelViewNav{display:flex;gap:7px;flex-wrap:wrap;padding:14px 20px;background:#192b44}
+.hotelViewNav button{background:#304b66;color:#e8d8b7;border:1px solid #68829a;box-shadow:none}
+.hotelViewNav button.active{background:linear-gradient(#ffe8b0,#dca05a);color:#403023;border-color:#fbe4ad}
+.hotelViewContent{padding:20px;min-height:270px}
+.hotelRoomSearch{display:flex;align-items:center;gap:16px;justify-content:space-between;margin-bottom:16px}
+.hotelRoomHeading{font-size:18px;font-weight:900;color:#ffe0a7}
+.hotelRoomSearch input{max-width:280px;background:#0d2035}
+.hotelRoomCards{display:grid;gap:9px;max-height:300px;overflow:auto}
+.hotelRoomCard{display:flex;align-items:center;gap:14px;background:#263b54;border:1px solid #708297;border-radius:12px;padding:10px}
+.hotelRoomThumbnail{width:78px;height:68px;flex-shrink:0;display:grid;place-items:center;font-size:32px;border-radius:8px;background:linear-gradient(145deg,#7da8b0,#466b80)}
+.hotelRoomDetails{min-width:0;flex:1}
+.hotelRoomDetails strong{color:#fff0c6;font-size:15px}
+.hotelRoomDetails p{margin:5px 0;color:#d8e1e8;font-size:12px}
+.hotelRoomDetails small{font-size:11px;color:#b6cbd8}
+.hotelEnter{white-space:nowrap;font-size:12px}
+.hotelEmpty{text-align:center;color:#d9d2c3;padding:28px}
+.roomomaticForm{max-width:650px;margin:auto;display:grid;gap:13px}
+.roomomaticForm h3{font:700 24px Georgia,serif;margin:0}
+.roomomaticForm p{font-size:13px;margin:0;color:#d6e0e9}
+.roomomaticForm label{display:grid;gap:5px;font-size:13px;font-weight:700;color:#ffe3ad}
+.roomomaticForm textarea{width:100%;resize:vertical;background:#0e2036;color:#fff;border:1px solid #66849a;border-radius:9px;padding:11px;font:inherit}
+.roomomaticForm .roomomaticPrivacy{display:flex;align-items:center;gap:9px}
+.roomomaticPrivacy input{width:auto}
+.roomomaticPreview{display:flex;gap:12px;align-items:center;background:#314e65;border:1px solid #a38b69;border-radius:12px;padding:12px}
+.roomomaticPreview span{font-size:36px}
+.roomomaticPreview strong{color:#ffe4a6}
+.roomomaticPreview small{color:#c5dce5}
+.roomomaticStatus{color:#ffd19e!important}
+.roomomaticCreate{justify-self:start}
+body.hotelViewActive{overflow:hidden}
+@media(max-width:650px){.hotelView{padding:5px}.hotelViewShell{max-height:98vh}.hotelViewHeader{padding:12px}.hotelViewScene{height:150px}.hotelViewBuilding{transform:scale(.75);transform-origin:bottom center}.hotelViewNav{padding:9px}.hotelViewNav button{font-size:11px;padding:8px}.hotelViewContent{padding:11px}.hotelRoomSearch{display:block}.hotelRoomSearch input{max-width:none;margin-top:10px}.hotelRoomThumbnail{width:48px;height:55px}.hotelRoomCard{gap:7px}.hotelEnter{padding:8px 6px;font-size:10px}}
