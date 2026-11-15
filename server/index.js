@@ -46,7 +46,27 @@ app.patch('/api/avatar',auth,async(req,res)=>{
  }catch(e){fail(res,e)}
 });
 app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id WHERE r.is_public OR r.owner_id=$1 ORDER BY r.id LIMIT 100',[req.user.id])).rows);}catch(e){fail(res,e);}});
-app.post('/api/rooms',auth,async(req,res)=>{try{const name=safe(req.body.name,64);if(name.length<3)return res.status(400).json({error:'Room name too short'});const count=await pool.query('SELECT count(*)::int AS n FROM rooms WHERE owner_id=$1',[req.user.id]);if(count.rows[0].n>=10)return res.status(400).json({error:'Room limit reached'});const r=await pool.query('INSERT INTO rooms(owner_id,name,description,is_public) VALUES($1,$2,$3,$4) RETURNING *',[req.user.id,name,safe(req.body.description,240),req.body.is_public!==false]);res.json(r.rows[0]);}catch(e){fail(res,e);}});
+const roomStyle=(body={})=>{
+ const validColor=(v,fallback)=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:fallback;
+ return {wall_color:validColor(body.wall_color,'#827b8f'),floor_color:validColor(body.floor_color,'#b3b8c8'),floor_pattern:['checker','solid','wood','tiles'].includes(body.floor_pattern)?body.floor_pattern:'checker',layout:['classic','lounge','studio'].includes(body.layout)?body.layout:'classic'};
+};
+app.post('/api/rooms',auth,async(req,res)=>{try{const name=safe(req.body.name,64);if(name.length<3)return res.status(400).json({error:'Room name too short'});const count=await pool.query('SELECT count(*)::int AS n FROM rooms WHERE owner_id=$1',[req.user.id]);if(count.rows[0].n>=10)return res.status(400).json({error:'Room limit reached'});const style=roomStyle(req.body);const r=await pool.query('INSERT INTO rooms(owner_id,name,description,is_public,wall_color,floor_color,floor_pattern,layout) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[req.user.id,name,safe(req.body.description,240),req.body.is_public!==false,style.wall_color,style.floor_color,style.floor_pattern,style.layout]);res.json(r.rows[0]);}catch(e){fail(res,e);}});
+app.patch('/api/rooms/:id',auth,async(req,res)=>{
+ const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Invalid room'});
+ try{
+  const current=(await pool.query('SELECT * FROM rooms WHERE id=$1 AND owner_id=$2',[id,req.user.id])).rows[0];
+  if(!current)return res.status(403).json({error:'Only the room owner can edit this room'});
+  const style=roomStyle({...current,...req.body});
+  const name=req.body.name===undefined?current.name:safe(req.body.name,64);
+  if(name.length<3)return res.status(400).json({error:'Room name too short'});
+  const description=req.body.description===undefined?current.description:safe(req.body.description,240);
+  const isPublic=req.body.is_public===undefined?current.is_public:req.body.is_public===true;
+  const updated=(await pool.query('UPDATE rooms SET name=$1,description=$2,is_public=$3,wall_color=$4,floor_color=$5,floor_pattern=$6,layout=$7 WHERE id=$8 AND owner_id=$9 RETURNING *',[name,description,isPublic,style.wall_color,style.floor_color,style.floor_pattern,style.layout,id,req.user.id])).rows[0];
+  io.to('room:'+id).emit('room:updated',updated);
+  if(!isPublic)for(const sid of [...(occupants.get(id)||[])]){const guest=io.sockets.sockets.get(sid);if(guest&&guest.data.user.id!==req.user.id){leave(guest);guest.emit('room:kicked',{reason:'Room is now private'});}}
+  res.json(updated);
+ }catch(e){fail(res,e)}
+});
 app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
 app.get('/api/inventory',auth,async(req,res)=>{try{res.json((await pool.query('SELECT kind,quantity FROM inventory WHERE user_id=$1',[req.user.id])).rows);}catch(e){fail(res,e);}});
 app.post('/api/buy',auth,async(req,res)=>{const kind=safe(req.body.kind,30),price=CATALOG[kind];if(!price)return res.status(400).json({error:'Unknown item'});const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 AND coins >= $1 RETURNING coins',[price,req.user.id]);if(!r.rowCount){await client.query('ROLLBACK');const balance=await client.query('SELECT coins FROM users WHERE id=$1',[req.user.id]);return res.status(400).json({error:'Not enough coins. Available: '+(balance.rows[0]?.coins??0)+'; item price: '+price});}await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[req.user.id,kind]);await client.query('COMMIT');res.json({coins:r.rows[0].coins});}catch(e){await client.query('ROLLBACK');fail(res,e);}finally{client.release();}});
