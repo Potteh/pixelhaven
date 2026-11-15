@@ -120,6 +120,89 @@ app.get('/api/mod/chatlogs',auth,staffGuard,async(req,res)=>{
   res.json({messages:rows,nextBefore:rows.length===limit?rows[rows.length-1].id:null});
  }catch(e){fail(res,e)}
 });
+// Social API: friendship and blocks are account-wide across profiles.
+const pair=(a,b)=>[Math.min(a,b),Math.max(a,b)];
+const blocked=async(a,b)=>(await pool.query('SELECT 1 FROM social_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)',[a,b])).rowCount>0;
+const areFriends=async(a,b)=>{const [lo,hi]=pair(a,b);return (await pool.query("SELECT 1 FROM social_friendships WHERE user_low=$1 AND user_high=$2 AND status='accepted'",[lo,hi])).rowCount>0};
+const socialNotify=(id,event,data)=>{for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===id)socket.emit(event,data)};
+app.get('/api/social/friends',auth,async(req,res)=>{
+ try{
+  const id=req.user.id;
+  const rows=(await pool.query(`SELECT f.user_low,f.user_high,f.requested_by,f.status,u.id,u.username,
+   CASE WHEN f.requested_by=$1 THEN 'outgoing' ELSE 'incoming' END AS direction
+   FROM social_friendships f JOIN users u ON u.id=CASE WHEN f.user_low=$1 THEN f.user_high ELSE f.user_low END
+   WHERE f.user_low=$1 OR f.user_high=$1 ORDER BY f.updated_at DESC`,[id])).rows;
+  res.json(rows.map(r=>({id:r.id,username:r.username,status:r.status,direction:r.direction,online:[...io.sockets.sockets.values()].some(s=>s.data.user?.id===r.id),roomId:[...io.sockets.sockets.values()].find(s=>s.data.user?.id===r.id&&s.data.roomId)?.data.roomId||null})));
+ }catch(e){fail(res,e)}
+});
+app.get('/api/social/blocks',auth,async(req,res)=>{
+ try{res.json((await pool.query('SELECT u.id,u.username FROM social_blocks b JOIN users u ON u.id=b.blocked_id WHERE b.blocker_id=$1 ORDER BY b.created_at DESC',[req.user.id])).rows)}catch(e){fail(res,e)}
+});
+app.post('/api/social/friends/:id',auth,async(req,res)=>{
+ const target=Number(req.params.id),action=req.body.action;
+ if(!validId(target)||target===req.user.id||!['request','accept','decline','remove'].includes(action))return res.status(400).json({error:'Invalid friend action'});
+ try{
+  if(await blocked(req.user.id,target))return res.status(403).json({error:'Friend requests unavailable'});
+  const [lo,hi]=pair(req.user.id,target);
+  if(action==='request'){
+   if(!(await pool.query('SELECT 1 FROM users WHERE id=$1',[target])).rowCount)return res.sendStatus(404);
+   const existing=(await pool.query('SELECT status FROM social_friendships WHERE user_low=$1 AND user_high=$2',[lo,hi])).rows[0];
+   if(existing)return res.status(409).json({error:'Friend request already exists'});
+   await pool.query("INSERT INTO social_friendships(user_low,user_high,requested_by,status) VALUES($1,$2,$3,'pending')",[lo,hi,req.user.id]);
+  }else if(action==='accept'){
+   const result=await pool.query("UPDATE social_friendships SET status='accepted',updated_at=now() WHERE user_low=$1 AND user_high=$2 AND requested_by<>$3 AND status='pending' RETURNING user_low",[lo,hi,req.user.id]);
+   if(!result.rowCount)return res.status(404).json({error:'No incoming friend request'});
+  }else{
+   const result=await pool.query("DELETE FROM social_friendships WHERE user_low=$1 AND user_high=$2 AND ($3='remove' OR (status='pending' AND requested_by<>$4)) RETURNING user_low",[lo,hi,action,req.user.id]);
+   if(!result.rowCount)return res.status(404).json({error:'Friendship not found'});
+  }
+  socialNotify(target,'social:changed',{type:'friends'});socialNotify(req.user.id,'social:changed',{type:'friends'});res.json({ok:true});
+ }catch(e){fail(res,e)}
+});
+app.post('/api/social/blocks/:id',auth,async(req,res)=>{
+ const target=Number(req.params.id),action=req.body.action;
+ if(!validId(target)||target===req.user.id||!['block','unblock'].includes(action))return res.status(400).json({error:'Invalid block action'});
+ try{
+  if(action==='block'){
+   await pool.query('INSERT INTO social_blocks(blocker_id,blocked_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[req.user.id,target]);
+   const [lo,hi]=pair(req.user.id,target);await pool.query('DELETE FROM social_friendships WHERE user_low=$1 AND user_high=$2',[lo,hi]);
+  }else await pool.query('DELETE FROM social_blocks WHERE blocker_id=$1 AND blocked_id=$2',[req.user.id,target]);
+  socialNotify(target,'social:changed',{type:'friends'});socialNotify(req.user.id,'social:changed',{type:'friends'});res.json({ok:true});
+ }catch(e){fail(res,e)}
+});
+app.get('/api/social/messages/:id',auth,async(req,res)=>{
+ const target=Number(req.params.id),before=req.query.before?Number(req.query.before):null;
+ if(!validId(target)||(before!==null&&!validId(before)))return res.status(400).json({error:'Invalid player'});
+ try{
+  if(await blocked(req.user.id,target)||!await areFriends(req.user.id,target))return res.status(403).json({error:'Messaging requires friendship'});
+  const rows=(await pool.query('SELECT id,sender_id,recipient_id,body,created_at FROM social_messages WHERE ((sender_id=$1 AND recipient_id=$2) OR (sender_id=$2 AND recipient_id=$1)) AND ($3::bigint IS NULL OR id<$3) ORDER BY id DESC LIMIT 50',[req.user.id,target,before])).rows;
+  res.json({messages:rows.reverse(),nextBefore:rows.length===50?rows[0].id:null});
+ }catch(e){fail(res,e)}
+});
+app.post('/api/social/messages/:id',auth,async(req,res)=>{
+ const target=Number(req.params.id),body=safe(req.body.body,1000);
+ if(!validId(target)||target===req.user.id||!body)return res.status(400).json({error:'Invalid message'});
+ try{
+  if(await blocked(req.user.id,target)||!await areFriends(req.user.id,target))return res.status(403).json({error:'Messaging requires friendship'});
+  const recent=await pool.query("SELECT count(*)::int AS n FROM social_messages WHERE sender_id=$1 AND created_at>now()-interval '1 minute'",[req.user.id]);
+  if(recent.rows[0].n>=20)return res.status(429).json({error:'Message rate limit reached'});
+  const msg=(await pool.query('INSERT INTO social_messages(sender_id,recipient_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,recipient_id,body,created_at',[req.user.id,target,body])).rows[0];
+  socialNotify(target,'social:message',msg);socialNotify(req.user.id,'social:message',msg);res.json(msg);
+ }catch(e){fail(res,e)}
+});
+app.post('/api/social/messages/:id/report',auth,async(req,res)=>{
+ const messageId=Number(req.params.id),reason=safe(req.body.reason,500);
+ if(!validId(messageId)||reason.length<5)return res.status(400).json({error:'Provide a report reason'});
+ try{
+  const message=(await pool.query('SELECT * FROM social_messages WHERE id=$1',[messageId])).rows[0];
+  if(!message||message.recipient_id!==req.user.id)return res.status(403).json({error:'Only the recipient can report this message'});
+  await pool.query('INSERT INTO social_message_reports(reporter_id,message_id,reason) VALUES($1,$2,$3) ON CONFLICT(reporter_id,message_id) DO NOTHING',[req.user.id,messageId,reason]);
+  res.json({ok:true});
+ }catch(e){fail(res,e)}
+});
+app.get('/api/mod/message-reports',auth,staffGuard,async(req,res)=>{
+ try{res.json((await pool.query('SELECT mr.id,mr.reason,mr.created_at,m.body,m.sender_id,m.recipient_id,s.username sender,r.username recipient FROM social_message_reports mr JOIN social_messages m ON m.id=mr.message_id JOIN users s ON s.id=m.sender_id JOIN users r ON r.id=m.recipient_id ORDER BY mr.created_at DESC LIMIT 100')).rows)}catch(e){fail(res,e)}
+});
 app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
 app.get('/api/inventory',auth,async(req,res)=>{try{res.json((await pool.query('SELECT kind,quantity FROM inventory WHERE user_id=$1',[req.user.id])).rows);}catch(e){fail(res,e);}});
 app.post('/api/buy',auth,async(req,res)=>{const kind=safe(req.body.kind,30),price=CATALOG[kind];if(!price)return res.status(400).json({error:'Unknown item'});const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 AND coins >= $1 RETURNING coins',[price,req.user.id]);if(!r.rowCount){await client.query('ROLLBACK');const balance=await client.query('SELECT coins FROM users WHERE id=$1',[req.user.id]);return res.status(400).json({error:'Not enough coins. Available: '+(balance.rows[0]?.coins??0)+'; item price: '+price});}await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[req.user.id,kind]);await client.query('COMMIT');res.json({coins:r.rows[0].coins});}catch(e){await client.query('ROLLBACK');fail(res,e);}finally{client.release();}});
