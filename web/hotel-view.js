@@ -16,7 +16,7 @@ async function refresh(){try{rooms=await apiRooms('/rooms');render()}catch(e){co
 function show(name='popular'){
  if(!localStorage.getItem('pixel_token'))return;
  previousFocus=document.activeElement;overlay.hidden=false;document.body.classList.add('hotelViewActive');
- setTab(name);close.focus();refresh();
+ query='';rooms=[];setTab(name);close.focus();refresh();
 }
 function hide(){overlay.hidden=true;document.body.classList.remove('hotelViewActive');previousFocus?.focus?.()}
 function setTab(name){tab=name;tabs.forEach(t=>{const active=t.dataset.roomTab===name;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active))});render()}
@@ -34,7 +34,7 @@ function render(){
   const own=rooms.filter(r=>Number(r.owner_id)===Number(window.pixelHotelUserId));
   const candidates=tab==='mine'?own:rooms;
   const visible=candidates.filter(r=>(r.name+' '+(r.description||'')+' '+(r.owner||'')).toLowerCase().includes(query.toLowerCase()));
-  if(!visible.length){list.append(make('p','hotelEmpty',tab==='mine'?'No rooms yet. Use Room-O-Matic to create one.':'No rooms match your search.'));return}
+  if(!visible.length){const msg=tab==='mine'?'No rooms owned by this account.':query?'No rooms match your search. Clear the search to see all rooms.':rooms.length?'No rooms in this category.':'No rooms were returned by the server.';list.append(make('p','hotelEmpty',msg));if(query){const clear=make('button','hotelEnter','Clear Search');clear.onclick=()=>{query='';search.value='';drawCards()};list.append(clear)}return}
   for(const r of visible){
    const card=make('article','hotelRoomCard');
    const art=make('div','hotelRoomThumbnail');art.textContent=Number(r.id)===1?'🏨':'🛋️';
