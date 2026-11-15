@@ -109,12 +109,37 @@ canvas.addEventListener('click',clickTile);
 function chatLine(username,body){} // Chat is displayed above avatars, not in a separate message window.
 function updateGuests(){$('#guests').replaceChildren();for(const p of players.values()){const el=document.createElement('div');el.className='guest';el.textContent='● '+p.user.username;$('#guests').append(el)}$('#online').textContent=players.size+' guests online'}
 function join(id){socket.emit('room:join',id,data=>{if(data.error)return toast(data.error);room=data.room;$('#roomTitle').textContent='🏨 '+room.name;furniture=data.furniture;players=new Map(data.players.map(p=>[p.socketId,p]));chatBubbles.clear();updateGuests()})}
-function connect(){socket=io({auth:{token}});socket.on('connect',()=>join(1));socket.on('connect_error',e=>toast(e.message));socket.on('player:joined',p=>{players.set(p.socketId,p);updateGuests()});socket.on('player:left',id=>{players.delete(id);chatBubbles.delete(id);updateGuests()});socket.on('player:pose',p=>{const a=players.get(p.socketId);if(a)a.pose=p.pose});socket.on('player:emote',p=>{const a=players.get(p.socketId);if(a)a.emote={name:p.name,until:p.until}});socket.on('player:moved',p=>{const a=players.get(p.socketId);if(a){a.x=p.x;a.y=p.y}});socket.on('chat:message',m=>{if(m.socketId&&players.has(m.socketId)){const now=Date.now(),entry=chatBubbles.get(m.socketId)||{messages:[]};entry.messages=entry.messages.filter(v=>v.until>now);entry.messages.push({text:String(m.body||''),until:now+7500});entry.messages=entry.messages.slice(-3);chatBubbles.set(m.socketId,entry)}});socket.on('furniture:added',f=>furniture.push(f));socket.on('furniture:removed',id=>{furniture=furniture.filter(f=>f.id!==id)});socket.on('disconnect',()=>{$('#online').textContent='Disconnected'})}
+function connect(){socket=io({auth:{token}});socket.on('connect',()=>join(1));socket.on('connect_error',e=>toast(e.message));socket.on('player:joined',p=>{players.set(p.socketId,p);updateGuests()});socket.on('player:left',id=>{players.delete(id);chatBubbles.delete(id);updateGuests()});socket.on('player:avatar',p=>{const a=players.get(p.socketId);if(a)a.user.avatar=p.avatar});socket.on('player:pose',p=>{const a=players.get(p.socketId);if(a)a.pose=p.pose});socket.on('player:emote',p=>{const a=players.get(p.socketId);if(a)a.emote={name:p.name,until:p.until}});socket.on('player:moved',p=>{const a=players.get(p.socketId);if(a){a.x=p.x;a.y=p.y}});socket.on('chat:message',m=>{if(m.socketId&&players.has(m.socketId)){const now=Date.now(),entry=chatBubbles.get(m.socketId)||{messages:[]};entry.messages=entry.messages.filter(v=>v.until>now);entry.messages.push({text:String(m.body||''),until:now+7500});entry.messages=entry.messages.slice(-3);chatBubbles.set(m.socketId,entry)}});socket.on('furniture:added',f=>furniture.push(f));socket.on('furniture:removed',id=>{furniture=furniture.filter(f=>f.id!==id)});socket.on('disconnect',()=>{$('#online').textContent='Disconnected'})}
 async function loadRooms(){const rooms=await api('/rooms');$('#rooms').replaceChildren();for(const r of rooms){const b=document.createElement('div');b.className='roomButton';b.textContent='🚪 '+r.name;const s=document.createElement('small');s.textContent=r.description||'Visit this room';b.append(s);b.onclick=()=>join(r.id);$('#rooms').append(b)}}
 async function loadInventory(){inventory=await api('/inventory');$('#inventory').replaceChildren();for(const item of inventory.filter(i=>i.quantity>0)){const b=document.createElement('button');b.className='invItem'+(selected===item.kind?' selected':'');b.textContent=(emoji[item.kind]||'📦')+' '+item.kind+' ×'+item.quantity;b.onclick=()=>{selected=selected===item.kind?null:item.kind;$('#placement').textContent=selected?'Placing '+selected+' — click a tile':'';loadInventory()};$('#inventory').append(b)}}
 function renderCatalog(){for(const [kind,price] of Object.entries(catalog)){const b=document.createElement('div');b.className='shopItem';b.textContent=(emoji[kind]||'📦')+' '+kind;const s=document.createElement('small');s.textContent=price+' coins · Click to buy';b.append(s);b.onclick=async()=>{try{const r=await api('/buy','POST',{kind});me.coins=r.coins;identity();await loadInventory();toast('Purchased '+kind)}catch(e){toast(e.message)}};$('#catalog').append(b)}}
 function identity(){$('#identity').textContent=me.username+' · 🪙 '+me.coins}
-function avatarEditor(){const names={skin:'Skin',shirt:'Outfit',hair:'Hair'};$('#avatarEditor').replaceChildren();for(const key of Object.keys(names)){const label=document.createElement('label');label.textContent=names[key];const sel=document.createElement('select');for(const c of colors){const o=document.createElement('option');o.value=c;o.textContent=c;o.style.background=c;sel.append(o)}sel.value=me.avatar[key];sel.onchange=async()=>{try{me=await api('/avatar','PATCH',{...me.avatar,[key]:sel.value});const p=players.get(socket?.id);if(p)p.user.avatar=me.avatar;toast('Avatar saved (rejoin to update other players)')}catch(e){toast(e.message)}};label.append(sel);$('#avatarEditor').append(label)}}
+function avatarEditor(){
+ const editor=$('#avatarEditor');editor.replaceChildren();
+ const config=[
+  ['skin','Skin tone',colors],['shirt','Clothing color',colors],['hair','Hair color',colors],
+  ['hairstyle','Hairstyle',['short','spiky','long','buzz','sidepart']],
+  ['face','Expression',['smile','neutral','happy','wink']],
+  ['outfit','Clothing style',['tee','hoodie','jacket']],
+  ['accessory','Accessory',['none','glasses','cap','headphones']]
+ ];
+ const preview=document.createElement('canvas');preview.width=120;preview.height=152;preview.className='avatarPreview';
+ const redraw=()=>{const g=preview.getContext('2d');g.clearRect(0,0,120,152);if(window.pixelAvatarPreview)window.pixelAvatarPreview(g,me.avatar)};
+ editor.append(preview);
+ for(const [key,name,values] of config){
+  const label=document.createElement('label');label.textContent=name;
+  const sel=document.createElement('select');
+  for(const v of values){const o=document.createElement('option');o.value=v;o.textContent=v.startsWith('#')?v:v.replace(/(^|\s)\w/g,m=>m.toUpperCase());if(v.startsWith('#'))o.style.background=v;sel.append(o)}
+  sel.value=me.avatar?.[key]||values[0];
+  sel.onchange=async()=>{
+   const old=me.avatar;
+   try{me=await api('/avatar','PATCH',{...me.avatar,[key]:sel.value});redraw();toast('Avatar updated for everyone')}
+   catch(e){sel.value=old[key]||values[0];toast(e.message)}
+  };
+  label.append(sel);editor.append(label);
+ }
+ redraw();
+}
 async function start(){try{me=await api('/me');$('#authOverlay').style.display='none';identity();avatarEditor();catalog=await api('/catalog');renderCatalog();await Promise.all([loadRooms(),loadInventory()]);connect()}catch{localStorage.removeItem('pixel_token');$('#authOverlay').style.display='grid'}}
 $('#authForm').onsubmit=async e=>{e.preventDefault();try{const r=await api(authRegister?'/register':'/login','POST',{username:$('#username').value,password:$('#password').value});token=r.token;localStorage.setItem('pixel_token',token);me=r.user;location.reload()}catch(e){$('#authError').textContent=e.message}};
 $('#authToggle').onclick=()=>{authRegister=!authRegister;$('#authTitle').textContent=authRegister?'Create account':'Welcome back';$('#authSubmit').textContent=authRegister?'Sign up':'Log in';$('#authToggle').textContent=authRegister?'Already registered? Log in':'New here? Create an account'};
