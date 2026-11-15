@@ -484,6 +484,7 @@ const transferLive=async t=>{
   await client.query('COMMIT');
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 };
+const furnitureLightStates=new Map();
 const roomKickTimeouts=new Map();const occupants=new Map();const positions=new Map();const poses=new Map();
 const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:displayUser(s.data.user),x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null,held:s.data.held||null}:null}).filter(Boolean);
 const leave=s=>{s.data.held=null;const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
@@ -709,6 +710,14 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
     const options=['soda','juice','water'],held=options[Math.floor(Math.random()*options.length)];
     s.data.held=held;s.data.lastInteract=now;
     io.to('room:'+roomId).emit('player:held',{socketId:s.id,held});return ack({ok:true,kind,held});
+   }
+   if(['lamp','moon_lamp','candy_cane_lamp','christmas_fireplace'].includes(kind)){
+    s.data.lastInteract=now;
+    const stateKey=roomId+':'+id;
+    const enabled=!furnitureLightStates.get(stateKey);
+    furnitureLightStates.set(stateKey,enabled);
+    io.to('room:'+roomId).emit('furniture:light',{id,enabled});
+    return ack({ok:true,kind,enabled});
    }
    if(kind==='smoke_machine'){
     s.data.lastInteract=now;io.to('room:'+roomId).emit('furniture:effect',{id,kind:'smoke',until:now+6000});return ack({ok:true,kind});
