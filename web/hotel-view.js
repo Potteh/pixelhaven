@@ -43,7 +43,7 @@ function render(){
    const meta=make('small',null,(r.owner?'By '+r.owner:'Official Hotel Room')+' · '+(r.is_public?'Public':'Private'));
    details.append(title,description,meta);
    const enter=make('button','hotelEnter','Enter Room');
-   enter.onclick=()=>{hide();document.getElementById('rooms')?.querySelector('[data-room-id="'+r.id+'"]')?.click()};
+   enter.onclick=()=>{hide();window.join?.(r.id)};
    card.append(art,details,enter);list.append(card);
   }
  }
@@ -66,7 +66,7 @@ function renderCreator(){
    const room=await apiRooms('/rooms','POST',{name:name.value.trim(),description:description.value.trim(),is_public:publicInput.checked});
    await refresh();setTab('mine');status.textContent='';
    // The existing app handles socket joins and the room's furniture state.
-   document.getElementById('rooms')?.querySelector('[data-room-id="'+room.id+'"]')?.click();
+   await window.loadRooms?.();window.join?.(room.id);
    hide();
   }catch(err){status.textContent=err.message}
   finally{busy=false;submit.disabled=false}
