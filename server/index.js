@@ -135,6 +135,44 @@ const areFriends=async(a,b)=>{const [lo,hi]=pair(a,b);return (await pool.query("
 const socialNotify=(id,event,data)=>{for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===id)socket.emit(event,data)};
 // Badge catalog, profile badges and administrator-managed grants.
 app.get('/api/badges',auth,async(req,res)=>{try{res.json((await pool.query('SELECT code,name,image_path FROM badge_definitions ORDER BY code')).rows)}catch(e){fail(res,e)}});
+// Achievement thresholds are server-controlled and cannot be awarded by the client.
+const ACHIEVEMENTS=[
+ {code:'FIRST_FRIEND',name:'First Friendship',description:'Make your first friend',metric:'friends',target:1},
+ {code:'SOCIAL_STAR',name:'Social Star',description:'Make five friends',metric:'friends',target:5},
+ {code:'ROOM_CREATOR',name:'Room Creator',description:'Create your first room',metric:'rooms',target:1},
+ {code:'ROOM_DESIGNER',name:'Room Designer',description:'Create five rooms',metric:'rooms',target:5},
+ {code:'FURNITURE_COLLECTOR',name:'Furniture Collector',description:'Own ten furniture items',metric:'furniture',target:10},
+ {code:'BADGE_COLLECTOR',name:'Badge Collector',description:'Collect three badges',metric:'badges',target:3}
+];
+async function achievementProgress(id){
+ const r=(await pool.query(`SELECT
+ (SELECT count(*)::int FROM social_friendships WHERE status='accepted' AND (user_low=$1 OR user_high=$1)) AS friends,
+ (SELECT count(*)::int FROM rooms WHERE owner_id=$1) AS rooms,
+ (SELECT coalesce(sum(quantity),0)::int FROM inventory WHERE user_id=$1) AS furniture,
+ (SELECT count(*)::int FROM user_badges WHERE user_id=$1) AS badges`,[id])).rows[0];
+ const newly=[];
+ for(const a of ACHIEVEMENTS){if(r[a.metric]>=a.target){const awarded=await pool.query('INSERT INTO profile_achievements(user_id,code) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING code',[id,a.code]);if(awarded.rowCount)newly.push(a.code)}}
+ return {progress:ACHIEVEMENTS.map(a=>({...a,current:Math.min(r[a.metric],a.target),unlocked:r[a.metric]>=a.target})),newly};
+}
+// Small, validated PNG/GIF uploads are stored in PostgreSQL so badges survive container rebuilds.
+app.post('/api/mod/badges/definitions',auth,adminGuard,async(req,res)=>{
+ const code=String(req.body?.code||'').trim().toUpperCase(),name=safe(req.body?.name,80),image=String(req.body?.image||'');
+ if(!/^[A-Z0-9_]{2,16}$/.test(code)||name.length<2)return res.status(400).json({error:'Badge code must be 2–16 letters/numbers; name at least 2 characters'});
+ const match=/^data:image\/(png|gif);base64,([A-Za-z0-9+/]+={0,2})$/.exec(image);
+ if(!match||image.length>185000)return res.status(400).json({error:'Upload a PNG or GIF no larger than 130 KB'});
+ const bytes=Buffer.from(match[2],'base64');
+ const png=bytes.length>=24&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+ const gif=bytes.length>=10&&['GIF87a','GIF89a'].includes(bytes.toString('ascii',0,6));
+ if(bytes.length>130000||bytes.length<20||(match[1]==='png'?!png:!gif))return res.status(400).json({error:'Invalid PNG/GIF image or file too large'});
+ const width=png?bytes.readUInt32BE(16):bytes.readUInt16LE(6),height=png?bytes.readUInt32BE(20):bytes.readUInt16LE(8);
+ if(width<1||height<1||width>512||height>512)return res.status(400).json({error:'Badge dimensions must be 1–512 pixels'});
+ try{
+  const inserted=await pool.query('INSERT INTO badge_definitions(code,name,image_path) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING code',[code,name,image]);
+  if(!inserted.rowCount)return res.status(409).json({error:'Badge code already exists'});
+  res.status(201).json({code,name,image_path:image});
+ }catch(e){fail(res,e)}
+});
+app.get('/api/achievements',auth,(req,res)=>res.json(ACHIEVEMENTS));
 // Public profiles expose safe display fields, never account secrets.
 app.get('/api/users/:id/profile',auth,async(req,res)=>{
  const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Invalid player'});
@@ -144,12 +182,13 @@ app.get('/api/users/:id/profile',auth,async(req,res)=>{
    (SELECT count(*)::int FROM social_friendships WHERE status='accepted' AND (user_low=u.id OR user_high=u.id)) AS friend_count
    FROM users u WHERE u.id=$1`,[id])).rows[0];
   if(!profile)return res.status(404).json({error:'Player not found'});
+  const stats=id===req.user.id?await achievementProgress(id):null;
   const [badges,equipped,achievements]=await Promise.all([
    pool.query('SELECT d.code,d.name,d.image_path,b.granted_at FROM user_badges b JOIN badge_definitions d ON d.code=b.code WHERE b.user_id=$1 ORDER BY b.granted_at DESC',[id]),
    pool.query('SELECT code,position FROM profile_equipped_badges WHERE user_id=$1 ORDER BY position',[id]),
    pool.query('SELECT code,earned_at FROM profile_achievements WHERE user_id=$1 ORDER BY earned_at DESC',[id])
   ]);
-  res.json({...profile,badges:badges.rows,equipped:equipped.rows,achievements:achievements.rows});
+  res.json({...profile,badges:badges.rows,equipped:equipped.rows,achievements:achievements.rows,achievement_progress:stats?.progress||null,new_achievements:stats?.newly||[]});
  }catch(e){fail(res,e)}
 });
 app.patch('/api/me/profile',auth,async(req,res)=>{
