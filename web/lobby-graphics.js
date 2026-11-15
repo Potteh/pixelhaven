@@ -1,4 +1,4 @@
-/* Pixel Haven v4.3 — Grand Lobby visual redesign. Original canvas art. */
+/* Pixel Haven v4.4 — Grand Lobby visual redesign. Original canvas art. */
 (()=>{
 'use strict';
 const oldRoom=window.drawRoom, oldDecor=window.lobbyDecor;
@@ -7,8 +7,8 @@ const polygon=(points,fill,stroke='#312738',width=2)=>{ctx.beginPath();points.fo
 const line=(x,y,X,Y,color,width=2)=>{ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(X,Y);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke()};
 const rect=(x,y,w,h,color)=>{ctx.fillStyle=color;ctx.fillRect(x,y,w,h)};
 const objects=[
- {x:0,y:0,kind:'plant'},{x:0,y:8,kind:'plant'},{x:8,y:0,kind:'plant'},
- {x:2,y:2,kind:'reception'},{x:2,y:6,kind:'sofa'},
+ {x:0,y:8,kind:'plant'},{x:8,y:0,kind:'plant'},
+ {x:1,y:1,kind:'reception'},{x:2,y:6,kind:'sofa'},
  {x:6,y:2,kind:'sofa'},{x:3,y:7,kind:'table'},
  {x:7,y:3,kind:'table'},{x:1,y:5,kind:'lamp'},
  {x:5,y:1,kind:'lamp'},{x:7,y:7,kind:'fountain'}
@@ -87,7 +87,21 @@ window.lobbyDecor=function(){
 };
 window.drawPixelLobbyObject=function(o){
  const p=tile(o.x,o.y),X=p.x,Y=p.y;
- if(['sofa','table','plant','lamp'].includes(o.kind)){drawFurniture(o);return;}
+ if(['table','plant','lamp'].includes(o.kind)){drawFurniture(o);return;}
+ if(o.kind==='sofa'){
+  ctx.save();
+  ctx.fillStyle='#16162766';ctx.beginPath();ctx.ellipse(X,Y+4,46,13,0,0,Math.PI*2);ctx.fill();
+  isoBox(X,Y,38,18,12,'#d8948b','#71384e','#a85569');
+  isoBox(X,Y-17,38,8,23,'#c36c7d','#76384f','#a64e67');
+  for(const dx of [-19,18]){
+   isoBox(X+dx,Y-7,17,10,5,'#edb0a0','#9f4d65','#c97982');
+   line(X+dx-6,Y-14,X+dx+4,Y-9,'#ffd4ba',2);
+  }
+  isoBox(X-35,Y-4,8,10,17,'#df9789','#8b4356','#b76570');
+  isoBox(X+35,Y-4,8,10,17,'#df9789','#8b4356','#b76570');
+  rect(X-27,Y+5,6,5,'#6b4052');rect(X+23,Y+5,6,5,'#6b4052');
+  ctx.restore();return;
+ }
  if(o.kind==='reception'){
   // Paneled walnut reception desk, marble countertop and brass kick plate.
   isoBox(X,Y,37,20,32,'#f0d9ad','#765047','#a66e54');
@@ -97,25 +111,24 @@ window.drawPixelLobbyObject=function(o){
   }
   line(X-34,Y+10,X,Y+28,'#e7ba6d',3);line(X,Y+28,X+34,Y+10,'#e7ba6d',3);
   ctx.save();ctx.textAlign='center';ctx.font='bold 11px Georgia,serif';ctx.fillStyle='#fff0c4';
-  ctx.fillText('RECEPTION',X,Y-49);ctx.restore();
-  rect(X+9,Y-49,15,3,'#f9e7b0');
+  ctx.fillText('RECEPTION',X,Y-34);ctx.restore();
   return;
  }
  if(o.kind==='fountain'){
   // Tiered aqua fountain with basin, stone rim and animated water jets.
   const t=Date.now()/700;
   ctx.save();
-  ctx.fillStyle='#111e2d77';ctx.beginPath();ctx.ellipse(X,Y+6,46,17,0,0,Math.PI*2);ctx.fill();
-  isoBox(X,Y,34,22,17,'#e6d6b9','#8a899a','#b5a9a7');
-  ctx.fillStyle='#62bcd1';ctx.beginPath();ctx.ellipse(X,Y-18,27,11,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#111e2d77';ctx.beginPath();ctx.ellipse(X,Y+8,57,20,0,0,Math.PI*2);ctx.fill();
+  isoBox(X,Y,44,27,21,'#e6d6b9','#8a899a','#b5a9a7');
+  ctx.fillStyle='#62bcd1';ctx.beginPath();ctx.ellipse(X,Y-22,35,13,0,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='#d5f9ff';ctx.lineWidth=2;
   for(let i=-2;i<=2;i++){
-   const x=X+i*9;ctx.beginPath();ctx.moveTo(x,Y-22);ctx.quadraticCurveTo(x+i*3,Y-55-5*Math.sin(t+i),X+i*4,Y-32);ctx.stroke();
+   const x=X+i*9;ctx.beginPath();ctx.moveTo(x,Y-25);ctx.quadraticCurveTo(x+i*4,Y-72-7*Math.sin(t+i),X+i*5,Y-37);ctx.stroke();
   }
-  isoBox(X,Y-18,10,7,19,'#e7d9bf','#8a92a1','#c1b7b3');
-  ctx.fillStyle='#b8f8ff';ctx.beginPath();ctx.ellipse(X,Y-44,11,4,0,0,Math.PI*2);ctx.fill();
+  isoBox(X,Y-24,13,9,26,'#e7d9bf','#8a92a1','#c1b7b3');
+  ctx.fillStyle='#b8f8ff';ctx.beginPath();ctx.ellipse(X,Y-57,15,5,0,0,Math.PI*2);ctx.fill();
   ctx.restore();
  }
 };
-console.info('[Pixel Haven] v4.3 Grand Lobby graphics active');
+console.info('[Pixel Haven] v4.4 Grand Lobby polish active');
 })();
