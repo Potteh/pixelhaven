@@ -79,28 +79,96 @@ function art(kind){
  }
  return start+gradient+a+end;
 }
-function get(kind){
- if(cache.has(kind))return cache.get(kind);
+
+/* Four authored facing states. Side and rear silhouettes are redrawn rather
+   than skewing the front sprite; direction 3 mirrors the authored side view. */
+function directionalArt(kind,rotation){
+ if(rotation===0||!['chair','sofa','bed','table'].includes(kind))return art(kind);
+ let a=shadow;
+ const rear=rotation===2;
+ if(kind==='chair'){
+  if(rear){
+   a+=path('M44 83 L41 110 L48 110 L52 86 M77 83 L80 110 L87 110 L84 84','#765345');
+   a+=path('M36 38 Q39 23 64 22 Q90 23 93 38 L91 87 Q64 101 37 87 Z','#b96b80');
+   a+=path('M43 41 Q45 31 64 30 Q82 30 86 41 L84 81 Q64 92 45 81 Z','#ce8290');
+   a+=line('M46 43 Q64 36 83 43','#f6b8a9',2);
+   a+=path('M32 78 Q64 88 96 78 L91 96 Q64 106 37 96 Z','#9e566d');
+   a+=line('M42 89 Q64 97 86 89','#e9a2a1',2);
+  }else{
+   a+=path('M43 84 L40 110 L47 110 L53 86 M79 81 L83 109 L90 109 L86 80','#6e5044');
+   a+=path('M36 32 Q43 23 55 30 L68 37 Q76 43 77 58 L75 86 Q65 95 53 90 L38 82 Q31 70 34 49 Z','#bc7185');
+   a+=path('M42 38 Q49 31 56 37 L66 43 Q71 48 71 57 L68 80 L42 70 Z','#e7a2a0');
+   a+=line('M43 41 Q53 38 64 47','#ffe0ce',2);
+   a+=path('M44 73 Q60 69 85 79 Q91 84 86 92 L71 100 Q53 99 38 88 Z','#d78c90');
+   a+=path('M36 69 Q29 67 28 78 L30 89 Q34 94 44 91 L49 79 Z','#b3677e');
+   a+=path('M80 76 Q89 75 92 83 L91 94 Q85 99 76 94 L72 83 Z','#ac5b74');
+   a+=line('M47 81 Q66 79 81 86','#f7c0b1',2);
+  }
+ }else if(kind==='sofa'){
+  if(rear){
+   a+=path('M22 90 L25 111 L33 111 L34 91 M96 91 L97 111 L105 111 L107 90','#674a49');
+   a+=path('M18 47 Q20 31 37 30 L91 30 Q108 32 111 48 L110 93 Q64 108 18 93 Z','#b66a7c');
+   a+=path('M25 48 Q28 38 40 38 L89 38 Q101 39 103 49 L103 84 Q64 97 25 84 Z','#ce8290');
+   a+=line('M30 47 Q64 39 99 47','#f4b8a9',2);
+   a+=path('M16 78 Q64 97 113 78 L110 96 Q64 114 18 96 Z','#985169');
+   a+=line('M25 91 Q64 104 103 91','#e9a6a0',2);
+  }else{
+   a+=path('M32 88 L29 111 L37 111 L42 91 M95 87 L100 111 L107 111 L103 88','#674b4c');
+   a+=path('M27 38 Q33 28 45 33 L91 52 Q103 58 105 72 L100 92 Q89 100 79 95 L33 76 Q23 68 27 38 Z','#b86c81');
+   a+=path('M33 42 Q38 35 46 39 L87 57 Q96 61 97 74 L92 83 L35 62 Z','#e59b9b');
+   a+=line('M37 43 L88 64','#ffddc8',2);
+   a+=path('M31 69 Q47 66 68 76 L98 87 Q103 94 94 99 Q81 106 63 98 L27 83 Z','#d5878d');
+   a+=line('M43 78 L86 94','#ffd1bd',2);
+   a+=path('M25 60 Q16 57 15 72 L19 88 Q26 95 39 89 L41 73 Z','#bc6f81');
+   a+=path('M99 77 Q111 74 115 87 L113 99 Q108 106 95 102 L89 88 Z','#a75a73');
+  }
+ }else if(kind==='bed'){
+  if(rear){
+   a+=path('M19 42 L19 109 L27 109 L27 75 M105 41 L105 109 L113 109 L113 76','#795b50');
+   a+=path('M17 41 Q64 17 111 41 L111 67 Q64 91 17 67 Z','#b88e78');
+   a+=path('M20 56 L64 32 L108 56 L64 80 Z','#f2e9dd');
+   a+=path('M18 65 L64 91 L111 65 L111 81 L64 108 L18 81 Z','#78b2c7');
+   a+=line('M21 73 L64 99 L109 73','#d7f3f6',2);
+  }else{
+   a+=path('M29 47 L25 106 L34 106 L38 68 M95 63 L96 109 L104 109 L103 67','#795d50');
+   a+=path('M25 52 L72 27 L109 48 L63 76 Z','#f1e8dc');
+   a+=path('M25 52 L63 76 L63 99 L25 75 Z','#7894a7');
+   a+=path('M63 76 L109 48 L109 72 L63 99 Z','#6389a1');
+   a+=path('M31 55 L73 33 L102 49 L62 70 Z','#fff7e9');
+   a+=path('M61 38 Q70 30 81 37 L91 44 Q85 54 74 55 L62 49 Z','#ffffff');
+   a+=path('M29 65 L64 84 L106 60 L106 76 L64 101 L29 81 Z','#79b5c9');
+   a+=line('M34 73 L64 91 L102 68','#d5f3f5',2);
+  }
+ }else if(kind==='table'){
+  // Side/rear tables use the same top material but distinct leg occlusion.
+  a+=path(rear?'M27 76 L25 109 L33 109 L37 78 M89 76 L95 109 L103 109 L97 77':'M40 73 L36 110 L44 110 L50 79 M93 69 L98 107 L106 107 L102 71','#765440');
+  a+=path(rear?'M16 62 L64 34 L112 62 L64 90 Z':'M23 52 L75 33 L113 66 L61 89 Z','url(#wood)');
+  a+=path(rear?'M16 62 L64 90 L64 98 L16 70 Z':'M23 52 L61 89 L61 97 L23 61 Z','#a06f50');
+  a+=path(rear?'M64 90 L112 62 L112 70 L64 98 Z':'M61 89 L113 66 L113 74 L61 97 Z','#b7845c');
+  a+=line(rear?'M23 62 L64 39 L104 62':'M31 53 L74 39 L105 66','#fff0d0',2);
+ }
+ if(rotation===3&&!rear)a='<g transform="translate(128 0) scale(-1 1)">'+a+'</g>';
+ return start+gradient+a+end;
+}
+function get(kind,rotation=0){
+ const key=kind+':'+rotation;
+ if(cache.has(key))return cache.get(key);
  const im=new Image();
- im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(art(kind));
- cache.set(kind,im);
+ im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(directionalArt(kind,rotation));
+ cache.set(key,im);
  return im;
 }
 const previous=window.drawFurniture;
 window.drawFurniture=function(f){
  if(!f?.kind)return previous?.(f);
- const p=tile(f.x,f.y),im=get(f.kind);
+ const rotation=((Number(f.rotation)||0)%4+4)%4;
+ const p=tile(f.x,f.y),im=get(f.kind,rotation);
  if(!im.complete||!im.naturalWidth)return;
  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
- const rotation=((Number(f.rotation)||0)%4+4)%4;
- // Keep furniture upright: change facing via horizontal mirroring and perspective,
- // never rotate the entire image (which would turn beds and chairs upside down).
+ // Each directional image is drawn upright with its own silhouette.
  ctx.translate(Math.round(p.x),Math.round(p.y));
- if(rotation===1){ctx.transform(.84,0,-.16,1,0,0)}
- else if(rotation===2){ctx.scale(-1,1)}
- else if(rotation===3){ctx.transform(-.84,0,.16,1,0,0)}
  ctx.drawImage(im,-64,-112,128,128);
  ctx.restore();
 };
-console.info('[Pixel Haven] v5.5 illustrated furniture atlas loaded');
+console.info('[Pixel Haven] v5.8 directional furniture atlas loaded');
 })();
