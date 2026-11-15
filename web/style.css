@@ -292,3 +292,12 @@ main{grid-template-columns:minmax(0,1fr) 300px;max-width:1800px}
 .pixelProfileCard .communityActions input{flex:1;min-width:160px}
 .profileBadgePicker{display:flex;flex-wrap:wrap;gap:10px}
 .profileBadgePicker label{padding:6px 10px;border:1px solid #6474a1;border-radius:8px;cursor:pointer}
+
+/* Badge Manager and Achievement Progress */
+.badgeCreateForm{display:grid;gap:10px;margin-top:14px;padding:12px;border:1px solid #6474a1;border-radius:10px}
+.badgeCreateForm label{display:grid;gap:5px}
+.badgeCreateForm input{max-width:100%;min-width:0}
+.achievementProgress{display:grid;gap:10px;margin:12px 0}
+.achievementProgressRow{display:grid;gap:4px;padding:8px;border:1px solid #55648c;border-radius:8px}
+.achievementProgressRow small{opacity:.85}
+.achievementProgressRow progress{width:100%;height:12px;accent-color:#f6c75d}
