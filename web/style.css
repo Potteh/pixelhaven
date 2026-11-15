@@ -279,3 +279,5 @@ main{grid-template-columns:minmax(0,1fr) 300px;max-width:1800px}
 .socialProfile{border:1px solid #8d85c9;border-radius:12px;padding:12px;margin:8px 0}
 .guestProfile{background:transparent;border:0;color:inherit;cursor:pointer;text-align:left;font:inherit}
 .guestProfile:hover{text-decoration:underline}
+
+.playerBadges{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}.playerBadge{display:flex;flex-direction:column;align-items:center;gap:4px;max-width:90px;text-align:center}.playerBadge img{width:64px;height:64px;object-fit:contain;image-rendering:pixelated}.playerBadge small{font-size:11px}
