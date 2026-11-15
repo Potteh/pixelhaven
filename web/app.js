@@ -293,6 +293,7 @@ async function start(){
   return;
  }
  window.pixelHotelUserId=me.id;
+ window.dispatchEvent(new Event('pixel:authenticated'));
  $('#authOverlay').style.display='none';
  try{
   identity();avatarEditor();catalog=await api('/catalog');renderCatalog();
