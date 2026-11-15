@@ -51,6 +51,91 @@ app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
 app.get('/api/inventory',auth,async(req,res)=>{try{res.json((await pool.query('SELECT kind,quantity FROM inventory WHERE user_id=$1',[req.user.id])).rows);}catch(e){fail(res,e);}});
 app.post('/api/buy',auth,async(req,res)=>{const kind=safe(req.body.kind,30),price=CATALOG[kind];if(!price)return res.status(400).json({error:'Unknown item'});const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 AND coins >= $1 RETURNING coins',[price,req.user.id]);if(!r.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Not enough coins'});}await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[req.user.id,kind]);await client.query('COMMIT');res.json({coins:r.rows[0].coins});}catch(e){await client.query('ROLLBACK');fail(res,e);}finally{client.release();}});
 app.post('/api/mod/ban',auth,async(req,res)=>{try{if(req.user.role!=='admin')return res.sendStatus(403);const id=Number(req.body.userId);if(!Number.isInteger(id)||id===req.user.id)return res.status(400).json({error:'Invalid target'});await pool.query('INSERT INTO bans(user_id,reason) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET reason=$2,expires_at=NULL',[id,safe(req.body.reason,240)]);for(const s of io.sockets.sockets.values())if(s.data.user?.id===id)s.disconnect(true);res.json({ok:true});}catch(e){fail(res,e);}});
+
+const staffRoles=['moderator','admin','owner'];
+const isStaff=u=>staffRoles.includes(u.role);
+const isAdmin=u=>['admin','owner'].includes(u.role);
+const staffGuard=(req,res,next)=>isStaff(req.user)?next():res.status(403).json({error:'Staff only'});
+const adminGuard=(req,res,next)=>isAdmin(req.user)?next():res.status(403).json({error:'Admin only'});
+const ownerGuard=(req,res,next)=>req.user.role==='owner'?next():res.status(403).json({error:'Owner only'});
+const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
+const tradeKinds=Object.keys(CATALOG);
+const tradeItems=raw=>{
+ if(!Array.isArray(raw)||raw.length>12)return null;
+ const items={};
+ for(const item of raw){if(!item||!tradeKinds.includes(item.kind)||!Number.isInteger(item.quantity)||item.quantity<1||item.quantity>99)return null;items[item.kind]=(items[item.kind]||0)+item.quantity;if(items[item.kind]>99)return null}
+ return items;
+};
+async function ensureCommunityTables(){
+ await pool.query(`CREATE TABLE IF NOT EXISTS player_reports(id BIGSERIAL PRIMARY KEY, reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL, target_id INTEGER REFERENCES users(id) ON DELETE SET NULL, category TEXT NOT NULL, details VARCHAR(1000) NOT NULL, status TEXT NOT NULL DEFAULT 'open', assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), resolved_at TIMESTAMPTZ)`);
+ await pool.query(`CREATE TABLE IF NOT EXISTS player_warnings(id BIGSERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id INTEGER REFERENCES users(id) ON DELETE SET NULL, reason VARCHAR(500) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+ await pool.query(`CREATE TABLE IF NOT EXISTS staff_audit(id BIGSERIAL PRIMARY KEY, actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL, target_id INTEGER REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+ await pool.query(`CREATE TABLE IF NOT EXISTS furniture_trades(id BIGSERIAL PRIMARY KEY, sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, offered JSONB NOT NULL, requested JSONB NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+ await pool.query("CREATE INDEX IF NOT EXISTS idx_trades_recipient ON furniture_trades(recipient_id,status)");
+ const ownerName=process.env.PIXELHAVEN_OWNER_USERNAME;
+ if(ownerName){await pool.query("UPDATE users SET role='owner' WHERE lower(username)=lower($1) AND role <> 'owner'",[ownerName]);}
+}
+ensureCommunityTables().catch(e=>{console.error('Community schema initialization failed',e);process.exit(1)});
+app.get('/api/community/users',auth,async(req,res)=>{try{const q=safe(req.query.q,40);if(q.length<2)return res.json([]);res.json((await pool.query("SELECT id,username,role FROM users WHERE username ILIKE $1 ORDER BY username LIMIT 20",['%'+q+'%'])).rows)}catch(e){fail(res,e)}});
+app.post('/api/reports',auth,async(req,res)=>{try{
+ const target=Number(req.body.targetId),category=safe(req.body.category,50),details=safe(req.body.details,1000);
+ if(!validId(target)||target===req.user.id||!['harassment','bullying','scam','inappropriate','other'].includes(category)||details.length<10)return res.status(400).json({error:'Select a player, category, and provide at least 10 characters'});
+ const recent=await pool.query("SELECT count(*)::int AS n FROM player_reports WHERE reporter_id=$1 AND created_at>now()-interval '1 hour'",[req.user.id]);
+ if(recent.rows[0].n>=5)return res.status(429).json({error:'Report limit reached; try again later'});
+ const row=await pool.query('INSERT INTO player_reports(reporter_id,target_id,category,details) VALUES($1,$2,$3,$4) RETURNING id',[req.user.id,target,category,details]);res.json({id:row.rows[0].id});
+ }catch(e){fail(res,e)}});
+app.get('/api/mod/reports',auth,staffGuard,async(req,res)=>{try{res.json((await pool.query("SELECT r.*,reporter.username reporter,target.username target,staff.username assigned_name FROM player_reports r LEFT JOIN users reporter ON reporter.id=r.reporter_id LEFT JOIN users target ON target.id=r.target_id LEFT JOIN users staff ON staff.id=r.assigned_to ORDER BY CASE WHEN r.status='open' THEN 0 WHEN r.status='picked' THEN 1 ELSE 2 END,r.created_at DESC LIMIT 150")).rows)}catch(e){fail(res,e)}});
+app.patch('/api/mod/reports/:id',auth,staffGuard,async(req,res)=>{try{const status=req.body.status;if(!['picked','resolved','dismissed','open'].includes(status))return res.status(400).json({error:'Invalid status'});const result=await pool.query("UPDATE player_reports SET status=$1,assigned_to=CASE WHEN $1='picked' THEN $2 ELSE assigned_to END,resolved_at=CASE WHEN $1 IN ('resolved','dismissed') THEN now() ELSE NULL END WHERE id=$3 RETURNING *",[status,req.user.id,Number(req.params.id)]);if(!result.rowCount)return res.sendStatus(404);await pool.query('INSERT INTO staff_audit(actor_id,target_id,action,details) VALUES($1,$2,$3,$4)',[req.user.id,result.rows[0].target_id,'report:'+status,JSON.stringify({reportId:result.rows[0].id})]);res.json(result.rows[0])}catch(e){fail(res,e)}});
+app.get('/api/mod/users',auth,staffGuard,async(req,res)=>{try{const q=safe(req.query.q,40);res.json((await pool.query("SELECT id,username,coins,role FROM users WHERE username ILIKE $1 ORDER BY username LIMIT 40",['%'+q+'%'])).rows)}catch(e){fail(res,e)}});
+app.get('/api/mod/audit',auth,adminGuard,async(req,res)=>{try{res.json((await pool.query('SELECT a.*,u.username actor,t.username target FROM staff_audit a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN users t ON t.id=a.target_id ORDER BY a.id DESC LIMIT 100')).rows)}catch(e){fail(res,e)}});
+app.post('/api/mod/action',auth,staffGuard,async(req,res)=>{const id=Number(req.body.userId),action=req.body.action,reason=safe(req.body.reason,500),amount=Number(req.body.amount);if(!validId(id)||id===req.user.id)return res.status(400).json({error:'Invalid target'});const client=await pool.connect();try{
+ await client.query('BEGIN');const target=(await client.query('SELECT id,role FROM users WHERE id=$1 FOR UPDATE',[id])).rows[0];if(!target){await client.query('ROLLBACK');return res.sendStatus(404)}
+ if(target.role==='owner'||(target.role==='admin'&&req.user.role!=='owner')||(target.role==='moderator'&&req.user.role==='moderator')){await client.query('ROLLBACK');return res.status(403).json({error:'Cannot moderate this staff role'})}
+ if(['ban','unban','credits','role'].includes(action)&&!isAdmin(req.user)){await client.query('ROLLBACK');return res.sendStatus(403)}
+ if(action==='role'&&req.user.role!=='owner'){await client.query('ROLLBACK');return res.status(403).json({error:'Only owner can assign staff roles'})}
+ if(action==='warn'){if(reason.length<3)throw Error('Reason required');await client.query('INSERT INTO player_warnings(user_id,moderator_id,reason) VALUES($1,$2,$3)',[id,req.user.id,reason])}
+ else if(action==='ban'){if(reason.length<3)throw Error('Reason required');await client.query('INSERT INTO bans(user_id,reason,expires_at) VALUES($1,$2,NULL) ON CONFLICT(user_id) DO UPDATE SET reason=EXCLUDED.reason,expires_at=NULL',[id,reason])}
+ else if(action==='unban'){await client.query('DELETE FROM bans WHERE user_id=$1',[id])}
+ else if(action==='credits'){if(!Number.isSafeInteger(amount)||amount===0||Math.abs(amount)>100000)throw Error('Invalid credit adjustment');const result=await client.query('UPDATE users SET coins=coins+$1 WHERE id=$2 AND coins+$1>=0 RETURNING coins',[amount,id]);if(!result.rowCount)throw Error('Insufficient credits')}
+ else if(action==='role'){if(!['player','moderator','admin'].includes(req.body.role))throw Error('Invalid role');await client.query('UPDATE users SET role=$1 WHERE id=$2',[req.body.role,id])}
+ else throw Error('Unknown action');
+ await client.query('INSERT INTO staff_audit(actor_id,target_id,action,details) VALUES($1,$2,$3,$4)',[req.user.id,id,action,JSON.stringify({reason,amount:action==='credits'?amount:undefined,role:action==='role'?req.body.role:undefined})]);
+ await client.query('COMMIT');
+ for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===id){
+ if(action==='ban')socket.disconnect(true);
+ else if(action==='warn')socket.emit('moderation:warning',{reason});
+ else if(action==='credits'||action==='role')socket.emit('account:changed',{action});
+ }
+ res.json({ok:true});
+ }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}});
+app.get('/api/trades',auth,async(req,res)=>{try{res.json((await pool.query("SELECT t.*,a.username sender,b.username recipient FROM furniture_trades t JOIN users a ON a.id=t.sender_id JOIN users b ON b.id=t.recipient_id WHERE t.sender_id=$1 OR t.recipient_id=$1 ORDER BY t.id DESC LIMIT 60",[req.user.id])).rows)}catch(e){fail(res,e)}});
+app.post('/api/trades',auth,async(req,res)=>{try{
+ const recipient=Number(req.body.recipientId),offered=tradeItems(req.body.offered),requested=tradeItems(req.body.requested);
+ if(!validId(recipient)||recipient===req.user.id||!offered||!requested||!Object.keys(offered).length&&!Object.keys(requested).length)return res.status(400).json({error:'Invalid trade'});
+ const exists=await pool.query('SELECT 1 FROM users WHERE id=$1',[recipient]);if(!exists.rowCount)return res.sendStatus(404);
+ const pending=await pool.query("SELECT count(*)::int AS n FROM furniture_trades WHERE sender_id=$1 AND status='pending'",[req.user.id]);if(pending.rows[0].n>=10)return res.status(429).json({error:'Too many pending trades'});
+ const result=await pool.query('INSERT INTO furniture_trades(sender_id,recipient_id,offered,requested) VALUES($1,$2,$3,$4) RETURNING id',[req.user.id,recipient,JSON.stringify(offered),JSON.stringify(requested)]);res.json({id:result.rows[0].id});
+ }catch(e){fail(res,e)}});
+app.post('/api/trades/:id/decision',auth,async(req,res)=>{const decision=req.body.decision;if(!['accept','decline','cancel'].includes(decision))return res.status(400).json({error:'Invalid decision'});const client=await pool.connect();try{
+ await client.query('BEGIN');const trade=(await client.query('SELECT * FROM furniture_trades WHERE id=$1 FOR UPDATE',[Number(req.params.id)])).rows[0];
+ if(!trade||trade.status!=='pending')throw Error('Trade no longer pending');
+ if(decision==='cancel'?trade.sender_id!==req.user.id:trade.recipient_id!==req.user.id)throw Error('Not authorized');
+ if(decision==='accept'){
+  // Serialize transfers across all trades for either account.
+  const ids=[trade.sender_id,trade.recipient_id].sort((a,b)=>a-b);
+  await client.query('SELECT id FROM users WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE',[ids]);
+  for(const [owner,items] of [[trade.sender_id,trade.offered],[trade.recipient_id,trade.requested]]){
+   for(const [kind,quantity] of Object.entries(items)){const r=await client.query('SELECT quantity FROM inventory WHERE user_id=$1 AND kind=$2 FOR UPDATE',[owner,kind]);if(!r.rowCount||r.rows[0].quantity<quantity)throw Error('Trade failed: one player no longer owns enough furniture')}
+  }
+  for(const [from,to,items] of [[trade.sender_id,trade.recipient_id,trade.offered],[trade.recipient_id,trade.sender_id,trade.requested]]){
+   for(const [kind,quantity] of Object.entries(items)){await client.query('UPDATE inventory SET quantity=quantity-$1 WHERE user_id=$2 AND kind=$3',[quantity,from,kind]);await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,$3) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+EXCLUDED.quantity',[to,kind,quantity])}
+  }
+ }
+ await client.query('UPDATE furniture_trades SET status=$1,updated_at=now() WHERE id=$2',[decision==='accept'?'completed':decision==='decline'?'declined':'cancelled',trade.id]);
+ await client.query('COMMIT');
+ for(const socket of io.sockets.sockets.values())if([trade.sender_id,trade.recipient_id].includes(socket.data.user?.id))socket.emit('trade:updated',{id:trade.id,status:decision});
+ res.json({ok:true});
+ }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}});
 const occupants=new Map();const positions=new Map();const poses=new Map();
 const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:s.data.user,x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null}:null}).filter(Boolean);
 const leave=s=>{const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
