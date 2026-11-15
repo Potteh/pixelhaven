@@ -20,7 +20,7 @@ app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'12kb
 app.use('/api',rateLimit({windowMs:15*60*1000,limit:120,standardHeaders:'draft-7',legacyHeaders:false}));
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 app.use(express.static(root));
-const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65};
+const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25};
 const safe=(s,max=240)=>String(s??'').trim().slice(0,max);
 const token=u=>jwt.sign({id:u.id},secret,{expiresIn:'7d'});
 const getUser=async id=>(await pool.query('SELECT id,username,coins,role,avatar FROM users WHERE id=$1',[id])).rows[0];
