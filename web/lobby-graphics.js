@@ -87,7 +87,7 @@ window.lobbyDecor=function(){
 };
 window.drawPixelLobbyObject=function(o){
  const p=tile(o.x,o.y),X=p.x,Y=p.y;
- if(['table','plant','lamp'].includes(o.kind)){drawFurniture(o);return;}
+ if(['table','plant','lamp','sofa'].includes(o.kind)){drawFurniture(o);return;}
  if(o.kind==='sofa'){
   ctx.save();
   ctx.fillStyle='#16162766';ctx.beginPath();ctx.ellipse(X,Y+4,46,13,0,0,Math.PI*2);ctx.fill();
