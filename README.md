@@ -70,6 +70,14 @@ The game window has shortcuts for Rooms, Shop, Bag, Looks, Trade, Report, and St
 
 Trade invitations are cancelled if a player disconnects or changes rooms. The live trade state is in memory; restarting the app cancels unfinished live trades. Test with two separate accounts before enabling trades publicly.
 
+### Advanced furniture interactions
+
+Room owners can use **Edit Furniture** to select placed furniture, **Rotate 90°**, **Move** (then click an empty tile), or **Pick Up** (return to inventory). The server validates ownership and destination occupancy, persists the changes, and broadcasts them to all players in the room.
+
+The Novelty catalog includes original illustrated **Vending Machine** (210 coins), **Teleporter** (350 coins), and **Door** (125 coins). Click a vending machine within three tiles to hold a random soda, juice, or water. Place two teleporters in the same room, then click one to teleport to the other. Click a door to play its temporary opening glow, or click the existing smoke machine to trigger a six-second smoke effect. Doors are decorative interactive furniture, not a security boundary; teleporters currently link only within the same room.
+
+Furniture interactions are server-validated. Smoke and door effects are temporary and not stored in the database. Moving occupied seating furniture clears its seated avatar state.
+
 ### Interactive food dispensers
 
 - **Ice Cream Machine:** Click a placed machine while standing within three tiles to receive vanilla, strawberry, or chocolate ice cream at random.
