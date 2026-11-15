@@ -16,7 +16,7 @@ const pool=new Pool({connectionString:process.env.DATABASE_URL});
 const secret=process.env.JWT_SECRET;
 if(!secret || secret.length<32) throw new Error('JWT_SECRET must contain at least 32 characters');
 const app=express(), http=createServer(app), io=new Server(http,{maxHttpBufferSize:12000});
-app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'12kb'}));
+app.use(helmet({contentSecurityPolicy:false}));app.use('/api/mod/badges/definitions',express.json({limit:'400kb'}));app.use(express.json({limit:'12kb'}));
 app.use('/api',rateLimit({windowMs:15*60*1000,limit:120,standardHeaders:'draft-7',legacyHeaders:false}));
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 app.use(express.static(root));
@@ -159,11 +159,11 @@ app.post('/api/mod/badges/definitions',auth,adminGuard,async(req,res)=>{
  const code=String(req.body?.code||'').trim().toUpperCase(),name=safe(req.body?.name,80),image=String(req.body?.image||'');
  if(!/^[A-Z0-9_]{2,16}$/.test(code)||name.length<2)return res.status(400).json({error:'Badge code must be 2–16 letters/numbers; name at least 2 characters'});
  const match=/^data:image\/(png|gif);base64,([A-Za-z0-9+/]+={0,2})$/.exec(image);
- if(!match||image.length>185000)return res.status(400).json({error:'Upload a PNG or GIF no larger than 130 KB'});
+ if(!match||image.length>350000)return res.status(400).json({error:'Upload a PNG or GIF no larger than 256 KB'});
  const bytes=Buffer.from(match[2],'base64');
  const png=bytes.length>=24&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
  const gif=bytes.length>=10&&['GIF87a','GIF89a'].includes(bytes.toString('ascii',0,6));
- if(bytes.length>130000||bytes.length<20||(match[1]==='png'?!png:!gif))return res.status(400).json({error:'Invalid PNG/GIF image or file too large'});
+ if(bytes.length>262144||bytes.length<20||(match[1]==='png'?!png:!gif))return res.status(400).json({error:'Invalid PNG/GIF image or file too large'});
  const width=png?bytes.readUInt32BE(16):bytes.readUInt16LE(6),height=png?bytes.readUInt32BE(20):bytes.readUInt16LE(8);
  if(width<1||height<1||width>512||height>512)return res.status(400).json({error:'Badge dimensions must be 1–512 pixels'});
  try{
