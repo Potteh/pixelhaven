@@ -2,3 +2,23 @@
 
 /* Visual refresh: deep navy chrome, gold accents, layered panels */
 :root{color:#f2f1f8;background:#0b1322}header{background:linear-gradient(90deg,#17233c,#202e49);border-bottom:2px solid #d7a95e}.brand{color:#f7f1e4;text-shadow:0 2px 0 #293b58}.brand b{color:#ffc45c}section,.roomHeader,.canvasWrap{background:linear-gradient(145deg,#24334f,#17243c);border:1px solid #55617b;box-shadow:0 10px 30px #0005}button{background:linear-gradient(#ffe5a0,#e6aa53);color:#372b25;box-shadow:inset 0 1px #fff9,0 2px 0 #976c3d}.roomButton,.shopItem,.invItem{background:linear-gradient(120deg,#253956,#1a2a43);border-color:#50647e}.roomButton:hover,.shopItem:hover,.invItem:hover{border-color:#ffd88e}h3{color:#ffd18a}.canvasWrap{padding:6px}canvas{background:#202d45;image-rendering:auto}.hint{border:1px solid #c5b08a66}#chat{background:#0d182a88;border-radius:8px;padding:8px}.authBox{background:linear-gradient(135deg,#293a59,#18243b);border-color:#a48a6c}
+
+/* Unified chat / inventory / avatar window */
+main{grid-template-columns:230px minmax(420px,1fr) 340px;align-items:start}
+.hotelHub{padding:12px;min-height:440px}
+.hubTitle{font-family:Georgia,serif;font-size:19px;font-weight:700;color:#ffe1a2;margin:2px 4px 12px}
+.hubTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-bottom:12px}
+.hubTab{font-size:12px;padding:10px 4px;background:#17243b;color:#c6d2e7;box-shadow:none;border:1px solid #52607b;border-radius:8px}
+.hubTab.active{background:linear-gradient(#ffe3a1,#d9a15b);color:#39283b;border-color:#ffe0a3;box-shadow:inset 0 1px #fff7}
+.hubTab:focus-visible{outline:3px solid #82e1e1;outline-offset:2px}
+.hubPanel[hidden]{display:none!important}
+.hubPanel{min-height:340px}
+.hubIntro{color:#f7d7a4;font-size:13px;margin:0 0 12px}
+.hubIntro small{display:block;margin-top:6px;overflow-wrap:anywhere}
+#hubChat #chat{height:320px;min-height:200px}
+#hubChat #chatForm{margin-top:10px}
+#hubInventory #inventory{max-height:360px;overflow-y:auto}
+#hubInventory .invItem{font-size:13px;margin:4px}
+#hubAvatar #avatarEditor{max-height:360px;overflow-y:auto}
+@media(max-width:1100px){main{grid-template-columns:220px minmax(0,1fr)}.right{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px}.right .hotelHub{grid-row:span 2}}
+@media(max-width:700px){main{display:flex;flex-direction:column}.right{display:block;width:100%}.center,main>aside{width:100%}.hotelHub{min-height:0}}
