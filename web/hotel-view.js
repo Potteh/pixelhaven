@@ -49,6 +49,40 @@ function render(){
  }
  drawCards();
 }
+const roomDesignFields=(form,values={})=>{
+ const controls={};
+ const row=(label,input)=>{const wrapper=make('label','roomomaticDesignField');wrapper.append(document.createTextNode(label),input);form.append(wrapper);return input};
+ for(const [key,label,fallback] of [['wall_color','Wall color','#827b8f'],['floor_color','Floor color','#b3b8c8']]){
+  const input=make('input');input.type='color';input.value=values[key]||fallback;controls[key]=row(label,input);
+ }
+ for(const [key,label,choices,defaultValue] of [
+  ['floor_pattern','Flooring',['checker','solid','wood','tiles'],'checker'],
+  ['layout','Room style',['classic','lounge','studio'],'classic']]){
+  const select=make('select');for(const option of choices){const o=make('option',null,option[0].toUpperCase()+option.slice(1));o.value=option;select.append(o)}select.value=values[key]||defaultValue;controls[key]=row(label,select);
+ }
+ return ()=>Object.fromEntries(Object.entries(controls).map(([k,v])=>[k,v.value]));
+};
+window.pixelRoomSettings=(room,onSaved)=>{
+ const backdrop=make('div','roomSettingsBackdrop'),panel=make('form','roomSettingsPanel');
+ const title=make('h3',null,'🎨 Room-O-Matic 2.0 — Room Settings');
+ const name=make('input');name.value=room.name;name.maxLength=64;name.required=true;
+ const description=make('textarea');description.value=room.description||'';description.maxLength=240;
+ const privacy=make('input');privacy.type='checkbox';privacy.checked=room.is_public;
+ const label=(text,input)=>{const l=make('label','roomomaticDesignField',text);l.append(input);panel.append(l)};
+ panel.append(title);label('Room name',name);label('Description',description);
+ const visibility=make('label','roomomaticPrivacy');visibility.append(privacy,document.createTextNode(' Public room — everyone can join'));panel.append(visibility);
+ const readStyle=roomDesignFields(panel,room);
+ const status=make('p','roomomaticStatus');panel.append(status);
+ const actions=make('div','roomSettingsActions'),cancel=make('button',null,'Cancel'),save=make('button',null,'Save Room');
+ cancel.type='button';save.type='submit';actions.append(cancel,save);panel.append(actions);backdrop.append(panel);document.body.append(backdrop);
+ const close=()=>backdrop.remove();cancel.onclick=close;
+ backdrop.addEventListener('click',e=>{if(e.target===backdrop)close()});
+ panel.onsubmit=async e=>{e.preventDefault();save.disabled=true;status.textContent='Saving…';try{
+  const updated=await apiRooms('/rooms/'+room.id,'PATCH',{name:name.value,description:description.value,is_public:privacy.checked,...readStyle()});
+  onSaved?.(updated);close();
+ }catch(err){status.textContent=err.message}finally{save.disabled=false}};
+ name.focus();
+};
 function renderCreator(){
  const form=make('form','roomomaticForm');
  const title=make('h3',null,'🛠️ Room-O-Matic');
@@ -56,14 +90,14 @@ function renderCreator(){
  const nameLabel=make('label',null,'Room name');const name=make('input');name.required=true;name.minLength=3;name.maxLength=64;name.placeholder='e.g. Winter Rooftop Lounge';nameLabel.append(name);
  const descriptionLabel=make('label',null,'Description');const description=make('textarea');description.maxLength=240;description.rows=3;description.placeholder='Tell guests what makes your room special';descriptionLabel.append(description);
  const privacy=make('label','roomomaticPrivacy');const publicInput=make('input');publicInput.type='checkbox';publicInput.checked=true;privacy.append(publicInput,document.createTextNode('Public room — visible in Explore Rooms'));
- const preview=make('div','roomomaticPreview');preview.append(make('span',null,'🛋️'),make('strong',null,'Your new room'),make('small',null,'10 × 10 isometric floor · decorate with your furniture'));
+ const styleSection=make('fieldset','roomomaticDesign');styleSection.append(make('legend',null,'Room appearance'));const readStyle=roomDesignFields(styleSection);const preview=make('div','roomomaticPreview');preview.append(make('span',null,'🛋️'),make('strong',null,'Your new room'),make('small',null,'10 × 10 isometric floor · decorate with your furniture'));
  const status=make('p','roomomaticStatus');
  const submit=make('button','roomomaticCreate','✨ Create Room');submit.type='submit';
- form.append(title,intro,preview,nameLabel,descriptionLabel,privacy,status,submit);
+ form.append(title,intro,preview,nameLabel,descriptionLabel,privacy,styleSection,status,submit);
  form.addEventListener('submit',async e=>{
   e.preventDefault();if(busy)return;busy=true;submit.disabled=true;status.textContent='Creating room…';
   try{
-   const room=await apiRooms('/rooms','POST',{name:name.value.trim(),description:description.value.trim(),is_public:publicInput.checked});
+   const room=await apiRooms('/rooms','POST',{name:name.value.trim(),description:description.value.trim(),is_public:publicInput.checked,...readStyle()});
    await refresh();setTab('mine');status.textContent='';
    // The existing app handles socket joins and the room's furniture state.
    await window.loadRooms?.();window.join?.(room.id);
