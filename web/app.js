@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s),canvas=$('#game'),ctx=canvas.getContext('2d');
 let token=localStorage.getItem('pixel_token'),me=null,socket=null,room=null,players=new Map(),furniture=[],selected=null,rotateMode=false,rotationTarget=null,catalog={},inventory=[],authRegister=false,chatBubbles=new Map();
 const colors=['#e8ad7d','#a96b46','#f2cba5','#6d4535','#4b86e8','#ef7d82','#72c49a','#9b7de5','#493323','#1c2535','#f5ca59','#ffffff'];
-const emoji={chair:'🪑',sofa:'🛋️',table:'🪵',plant:'🪴',lamp:'💡',bed:'🛏️',arcade:'🕹️',club_sofa:'🛋️',royal_throne:'👑',ice_cream_machine:'🍦',fridge:'🧊',smoke_machine:'🌫️',christmas_tree:'🎄',christmas_sofa:'🛋️',christmas_fireplace:'🔥',snowman:'⛄',gift_stack:'🎁',candy_cane_lamp:'🍬',festive_rug:'❄️',gold_bar:'🪙',nickel:'🥉',quarter:'🪙'};
+const emoji={chair:'🪑',sofa:'🛋️',table:'🪵',plant:'🪴',lamp:'💡',bed:'🛏️',arcade:'🕹️',club_sofa:'🛋️',royal_throne:'👑',ice_cream_machine:'🍦',fridge:'🧊',vending_machine:'🥤',teleporter:'🌀',door:'🚪',smoke_machine:'🌫️',christmas_tree:'🎄',christmas_sofa:'🛋️',christmas_fireplace:'🔥',snowman:'⛄',gift_stack:'🎁',candy_cane_lamp:'🍬',festive_rug:'❄️',gold_bar:'🪙',nickel:'🥉',quarter:'🪙'};
 function toast(s){$('#toast').textContent=s;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',3200)}
 async function api(url,method='GET',data){const r=await fetch('/api'+url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data?JSON.stringify(data):undefined});const j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}
 function tile(x,y,z=0){return {x:500+(x-y)*43,y:118+(x+y)*24-z}}
@@ -103,7 +103,7 @@ function lobbyDecor(){
  for(const [x,y] of [[1,5],[5,1],[7,7]]){const q=t(x,y);const g=ctx.createRadialGradient(q.x,q.y,1,q.x,q.y,72);g.addColorStop(0,'#f9d88a22');g.addColorStop(1,'#f9d88a00');ctx.fillStyle=g;ctx.fillRect(q.x-72,q.y-72,144,144)}
 }
 
-const heldNames={icecream_vanilla:'Vanilla ice cream',icecream_strawberry:'Strawberry ice cream',icecream_chocolate:'Chocolate ice cream',carrot:'Carrot',blackcurrant:'Blackcurrant'};
+const heldNames={soda:'Soda',juice:'Juice',water:'Water',icecream_vanilla:'Vanilla ice cream',icecream_strawberry:'Strawberry ice cream',icecream_chocolate:'Chocolate ice cream',carrot:'Carrot',blackcurrant:'Blackcurrant'};
 function drawHeldFood(p){
  if(!p.held)return;
  const pt=window.pixelAvatarPosition?.(p.socketId)||tile(p.x,p.y);
@@ -115,7 +115,7 @@ function drawHeldFood(p){
   ctx.fillStyle='#d9a46c';ctx.beginPath();ctx.moveTo(x-6,y+2);ctx.lineTo(x+6,y+2);ctx.lineTo(x,y+19);ctx.closePath();ctx.fill();ctx.stroke();
   ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y-2,8,Math.PI,0);ctx.lineTo(x+8,y+3);ctx.lineTo(x-8,y+3);ctx.closePath();ctx.fill();ctx.stroke();
   ctx.fillStyle='#ffffff77';ctx.fillRect(x-3,y-7,4,2);
- }else if(p.held==='carrot'){
+ }else if(['soda','juice','water'].includes(p.held)){ctx.fillStyle={soda:'#dc5b62',juice:'#f3ae52',water:'#74c4ed'}[p.held];ctx.fillRect(x-7,y-10,14,25);ctx.strokeRect(x-7,y-10,14,25);ctx.fillStyle='#f4f8ff';ctx.fillRect(x-7,y-12,14,4);ctx.fillRect(x-3,y+1,6,6)}else if(p.held==='carrot'){
   ctx.fillStyle='#ed8a2f';ctx.beginPath();ctx.moveTo(x-7,y-8);ctx.lineTo(x+7,y-8);ctx.lineTo(x,y+17);ctx.closePath();ctx.fill();ctx.stroke();
   ctx.strokeStyle='#3c914c';ctx.lineWidth=3;for(const dx of [-5,0,5]){ctx.beginPath();ctx.moveTo(x,y-8);ctx.lineTo(x+dx,y-16);ctx.stroke()}
  }else if(p.held==='blackcurrant'){
@@ -124,16 +124,56 @@ function drawHeldFood(p){
  }
  ctx.restore();
 }
-function render(){ctx.clearRect(0,0,1000,660);drawRoom();const isLobby=room&&Number(room.id)===1;if(isLobby)lobbyDecor();const decorations=isLobby&&window.pixelLobbyObjects?window.pixelLobbyObjects:[];const entities=[...decorations.map(f=>({...f,type:'decor'})),...furniture.map(f=>({...f,type:'f'})),...players.values().map(p=>({...p,type:'player'}))].sort((a,b)=>((a.x+a.y)-(b.x+b.y))||((a.type==='player'?1:0)-(b.type==='player'?1:0)));for(const e of entities){if(e.type==='player'){drawAvatar(e);drawHeldFood(e)}else{window.pixelRoomFloorShadow?.(e);if(e.type==='decor')window.drawPixelLobbyObject(e);else drawFurniture(e)}}if(window.drawRoomChatBubbles)window.drawRoomChatBubbles();requestAnimationFrame(render)}requestAnimationFrame(render);
-function clickTile(e){if(!room)return;const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*1000/r.width,py=(e.clientY-r.top)*660/r.height;const dx=(px-500)/43,dy=(py-118)/24;const x=Math.floor((dx+dy)/2+.5),y=Math.floor((dy-dx)/2+.5);if(x<0||y<0||x>9||y>9)return;if(rotateMode){const item=furniture.find(f=>f.x===x&&f.y===y);if(item){rotationTarget=item.id;updateRotateControls();toast('Selected '+item.kind+' — press Rotate to turn it')}else toast('Click placed furniture to select it');return;}if(!selected){const dispenser=furniture.find(f=>['ice_cream_machine','fridge'].includes(f.kind)&&f.x===x&&f.y===y);if(dispenser){socket.emit('furniture:dispense',dispenser.id,a=>{if(a?.error)toast(a.error);else toast('Holding '+(heldNames[a.held]||'food')+' — use Drop Food to put it away')});return;}}if(!selected){const seat=furniture.find(f=>['chair','sofa','bed','club_sofa','royal_throne','christmas_sofa'].includes(f.kind)&&f.x===x&&f.y===y);if(seat){socket.emit('player:sit',seat.id,a=>{if(a?.error)toast(a.error)});return;}}if(selected){socket.emit('furniture:place',{kind:selected,x,y},a=>{if(a.error)toast(a.error);else{selected=null;$('#placement').textContent='';loadInventory()}})}else{socket.emit('player:move',{x,y})}}
+const furnitureEffects=new Map();
+function drawFurnitureEffect(f){
+ const effect=furnitureEffects.get(f.id);if(!effect)return;
+ const now=Date.now();if(effect.until<=now){furnitureEffects.delete(f.id);return}
+ const p=tile(f.x,f.y),phase=now/240;
+ ctx.save();
+ if(effect.kind==='smoke'){
+  for(let i=0;i<7;i++){const lift=(phase*8+i*17)%115;ctx.globalAlpha=.28*(1-lift/140);ctx.fillStyle=i%2?'#d5e4f2':'#9ac5e0';ctx.beginPath();ctx.arc(p.x+Math.sin(phase+i)*20,p.y-40-lift,11+i%3*4,0,Math.PI*2);ctx.fill()}
+ }else if(effect.kind==='teleport'){ctx.strokeStyle='#78eaff';ctx.lineWidth=4;ctx.globalAlpha=.55+.35*Math.sin(phase);ctx.beginPath();ctx.ellipse(p.x,p.y-42,34,57,0,0,Math.PI*2);ctx.stroke()}
+ else if(effect.kind==='door'){ctx.fillStyle='#a9effb55';ctx.fillRect(p.x-26,p.y-102,52,90)}
+ ctx.restore();
+}
+function render(){ctx.clearRect(0,0,1000,660);drawRoom();const isLobby=room&&Number(room.id)===1;if(isLobby)lobbyDecor();const decorations=isLobby&&window.pixelLobbyObjects?window.pixelLobbyObjects:[];const entities=[...decorations.map(f=>({...f,type:'decor'})),...furniture.map(f=>({...f,type:'f'})),...players.values().map(p=>({...p,type:'player'}))].sort((a,b)=>((a.x+a.y)-(b.x+b.y))||((a.type==='player'?1:0)-(b.type==='player'?1:0)));for(const e of entities){if(e.type==='player'){drawAvatar(e);drawHeldFood(e)}else{window.pixelRoomFloorShadow?.(e);if(e.type==='decor')window.drawPixelLobbyObject(e);else{drawFurniture(e);drawFurnitureEffect(e)}}}if(window.drawRoomChatBubbles)window.drawRoomChatBubbles();requestAnimationFrame(render)}requestAnimationFrame(render);
+let furnitureMoveMode=false;
+function clickTile(e){
+ if(!room)return;
+ const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*1000/r.width,py=(e.clientY-r.top)*660/r.height;
+ const dx=(px-500)/43,dy=(py-118)/24,x=Math.floor((dx+dy)/2+.5),y=Math.floor((dy-dx)/2+.5);
+ if(x<0||y<0||x>9||y>9)return;
+ const item=furniture.find(f=>f.x===x&&f.y===y);
+ if(rotateMode){
+  if(furnitureMoveMode&&rotationTarget){
+   socket.emit('furniture:move',{itemId:rotationTarget,x,y},a=>{if(a?.error)toast(a.error);else{toast('Furniture moved');rotationTarget=null;furnitureMoveMode=false;updateRotateControls()}});return;
+  }
+  if(item){rotationTarget=item.id;updateRotateControls();toast('Selected '+item.kind+' — rotate, move or pick up')}else toast('Select furniture first');return;
+ }
+ if(selected){
+  socket.emit('furniture:place',{kind:selected,x,y},a=>{if(a?.error)toast(a.error);else{selected=null;$('#placement').textContent='';loadInventory()}});return;
+ }
+ if(item){
+  if(['ice_cream_machine','fridge'].includes(item.kind)){
+   socket.emit('furniture:dispense',item.id,a=>toast(a?.error||'Holding '+(heldNames[a.held]||'food')));return;
+  }
+  if(['vending_machine','teleporter','door','smoke_machine'].includes(item.kind)){
+   socket.emit('furniture:interact',item.id,a=>toast(a?.error||(a.held?'Holding '+(heldNames[a.held]||a.held):({teleporter:'Teleported!',door:'Door opened!',smoke_machine:'Smoke activated!'}[item.kind]||'Activated!'))));return;
+  }
+  if(['chair','sofa','bed','club_sofa','royal_throne','christmas_sofa'].includes(item.kind)){
+   socket.emit('player:sit',item.id,a=>{if(a?.error)toast(a.error)});return;
+  }
+ }
+ socket.emit('player:move',{x,y});
+}
 canvas.addEventListener('click',clickTile);
 function updateRotateControls(){
  const button=document.getElementById('furnitureRotate'),toggle=document.getElementById('furnitureEdit');
  if(button)button.disabled=!rotateMode||!rotationTarget||!socket?.connected;
- if(toggle){toggle.classList.toggle('active',rotateMode);toggle.setAttribute('aria-pressed',String(rotateMode));toggle.textContent=rotateMode?'✓ Editing furniture':'✥ Edit furniture'}
+ const move=document.getElementById('furnitureMove'),pickup=document.getElementById('furniturePickup');if(move){move.disabled=!rotateMode||!rotationTarget;move.classList.toggle('active',furnitureMoveMode)}if(pickup)pickup.disabled=!rotateMode||!rotationTarget;if(toggle){toggle.classList.toggle('active',rotateMode);toggle.setAttribute('aria-pressed',String(rotateMode));toggle.textContent=rotateMode?'✓ Editing furniture':'✥ Edit furniture'}
 }
 document.getElementById('furnitureEdit')?.addEventListener('click',()=>{
- rotateMode=!rotateMode;rotationTarget=null;if(rotateMode)selected=null;
+ rotateMode=!rotateMode;furnitureMoveMode=false;rotationTarget=null;if(rotateMode)selected=null;
  updateRotateControls();toast(rotateMode?'Click furniture, then press Rotate':'Furniture editing closed');
 });
 document.getElementById('furnitureRotate')?.addEventListener('click',()=>{
@@ -141,10 +181,12 @@ document.getElementById('furnitureRotate')?.addEventListener('click',()=>{
  socket.emit('furniture:rotate',rotationTarget,response=>{if(response?.error)toast(response.error);else toast('Furniture rotated')});
 });
 
+document.getElementById('furnitureMove')?.addEventListener('click',()=>{if(!rotationTarget)return;furnitureMoveMode=true;updateRotateControls();toast('Click an empty tile to move the selected furniture')});
+document.getElementById('furniturePickup')?.addEventListener('click',()=>{if(!rotationTarget)return;socket.emit('furniture:remove',rotationTarget,async a=>{if(a?.error)toast(a.error);else{rotationTarget=null;furnitureMoveMode=false;updateRotateControls();await loadInventory();toast('Furniture returned to inventory')}})});
 function chatLine(username,body){} // Chat is displayed above avatars, not in a separate message window.
 function updateGuests(){$('#guests').replaceChildren();for(const p of players.values()){const el=document.createElement('div');el.className='guest';el.textContent='● '+p.user.username;$('#guests').append(el)}$('#online').textContent=players.size+' guests online'}
 function join(id){socket.emit('room:join',id,data=>{if(data.error)return toast(data.error);room=data.room;rotationTarget=null;updateRotateControls();$('#roomTitle').textContent='🏨 '+room.name;furniture=data.furniture;players=new Map(data.players.map(p=>[p.socketId,p]));chatBubbles.clear();const drop=document.getElementById('dropHeldFood');if(drop)drop.hidden=true;updateGuests()})}
-function connect(){socket=io({auth:{token}});socket.on('connect',()=>join(1));socket.on('connect_error',e=>toast(e.message));socket.on('account:changed',async data=>{if(data&&Number.isFinite(Number(data.coins))&&data.coins!==undefined){me.coins=Number(data.coins);identity()}else await refreshCoinBalance()});socket.on('player:joined',p=>{players.set(p.socketId,p);updateGuests()});socket.on('player:left',id=>{players.delete(id);chatBubbles.delete(id);updateGuests()});socket.on('player:identity',p=>{const player=players.get(p.socketId);if(player){player.user=p.user;updateGuests()}});socket.on('player:avatar',p=>{const a=players.get(p.socketId);if(a)a.user.avatar=p.avatar});socket.on('player:held',p=>{const a=players.get(p.socketId);if(a)a.held=p.held;const drop=document.getElementById('dropHeldFood');if(drop&&p.socketId===socket.id)drop.hidden=!p.held});socket.on('player:pose',p=>{const a=players.get(p.socketId);if(a)a.pose=p.pose});socket.on('player:emote',p=>{const a=players.get(p.socketId);if(a)a.emote={name:p.name,until:p.until}});socket.on('player:moved',p=>{const a=players.get(p.socketId);if(a){a.x=p.x;a.y=p.y}});socket.on('chat:message',m=>{if(m.socketId&&players.has(m.socketId)){const now=Date.now(),entry=chatBubbles.get(m.socketId)||{messages:[]};entry.messages=entry.messages.filter(v=>v.until>now);entry.messages.push({text:String(m.body||''),until:now+7500});entry.messages=entry.messages.slice(-3);chatBubbles.set(m.socketId,entry)}});socket.on('furniture:added',f=>furniture.push(f));socket.on('furniture:rotated',data=>{const f=furniture.find(item=>item.id===data.id);if(f)f.rotation=data.rotation;});socket.on('furniture:removed',id=>{furniture=furniture.filter(f=>f.id!==id)});socket.on('moderation:warning',data=>{alert('Hotel staff warning: '+String(data.reason||'Please follow hotel rules'))});socket.on('trade:updated',()=>{toast('Your trade has been updated');loadInventory().catch(()=>{})});socket.on('disconnect',()=>{$('#online').textContent='Disconnected'})}
+function connect(){socket=io({auth:{token}});socket.on('connect',()=>join(1));socket.on('connect_error',e=>toast(e.message));socket.on('account:changed',async data=>{if(data&&Number.isFinite(Number(data.coins))&&data.coins!==undefined){me.coins=Number(data.coins);identity()}else await refreshCoinBalance()});socket.on('player:joined',p=>{players.set(p.socketId,p);updateGuests()});socket.on('player:left',id=>{players.delete(id);chatBubbles.delete(id);updateGuests()});socket.on('player:identity',p=>{const player=players.get(p.socketId);if(player){player.user=p.user;updateGuests()}});socket.on('player:avatar',p=>{const a=players.get(p.socketId);if(a)a.user.avatar=p.avatar});socket.on('player:held',p=>{const a=players.get(p.socketId);if(a)a.held=p.held;const drop=document.getElementById('dropHeldFood');if(drop&&p.socketId===socket.id)drop.hidden=!p.held});socket.on('player:pose',p=>{const a=players.get(p.socketId);if(a)a.pose=p.pose});socket.on('player:emote',p=>{const a=players.get(p.socketId);if(a)a.emote={name:p.name,until:p.until}});socket.on('player:moved',p=>{const a=players.get(p.socketId);if(a){a.x=p.x;a.y=p.y}});socket.on('chat:message',m=>{if(m.socketId&&players.has(m.socketId)){const now=Date.now(),entry=chatBubbles.get(m.socketId)||{messages:[]};entry.messages=entry.messages.filter(v=>v.until>now);entry.messages.push({text:String(m.body||''),until:now+7500});entry.messages=entry.messages.slice(-3);chatBubbles.set(m.socketId,entry)}});socket.on('furniture:added',f=>furniture.push(f));socket.on('furniture:moved',data=>{const f=furniture.find(v=>v.id===data.id);if(f){f.x=data.x;f.y=data.y}});socket.on('furniture:effect',data=>{furnitureEffects.set(data.id,data)});socket.on('furniture:rotated',data=>{const f=furniture.find(item=>item.id===data.id);if(f)f.rotation=data.rotation;});socket.on('furniture:removed',id=>{furniture=furniture.filter(f=>f.id!==id)});socket.on('moderation:warning',data=>{alert('Hotel staff warning: '+String(data.reason||'Please follow hotel rules'))});socket.on('trade:updated',()=>{toast('Your trade has been updated');loadInventory().catch(()=>{})});socket.on('disconnect',()=>{$('#online').textContent='Disconnected'})}
 async function loadRooms(){const rooms=await api('/rooms');$('#rooms').replaceChildren();for(const r of rooms){const b=document.createElement('div');b.className='roomButton';b.dataset.roomId=String(r.id);b.textContent='🚪 '+r.name;const s=document.createElement('small');s.textContent=r.description||'Visit this room';b.append(s);b.onclick=()=>join(r.id);$('#rooms').append(b)}}
 async function loadInventory(){inventory=await api('/inventory');$('#inventory').replaceChildren();for(const item of inventory.filter(i=>i.quantity>0)){const b=document.createElement('button');b.className='invItem'+(selected===item.kind?' selected':'');b.textContent=(emoji[item.kind]||'📦')+' '+item.kind+' ×'+item.quantity;b.onclick=()=>{if(['gold_bar','nickel','quarter'].includes(item.kind)){toast('Trade or redeem this coin token; it cannot be placed on the floor');return;}selected=selected===item.kind?null:item.kind;$('#placement').textContent=selected?'Placing '+selected+' — click a tile':'';loadInventory()};$('#inventory').append(b);if(['gold_bar','nickel','quarter'].includes(item.kind)){const redeem=document.createElement('button');redeem.type='button';redeem.className='invItem';redeem.textContent='💰 Redeem 1';redeem.onclick=async()=>{try{const result=await api('/redeem','POST',{kind:item.kind,quantity:1});me.coins=result.coins;identity();await loadInventory();toast('Redeemed '+item.kind)}catch(e){toast(e.message)}};$('#inventory').append(redeem)}}}
 function renderCatalog(){
@@ -152,7 +194,7 @@ function renderCatalog(){
  const collections=[
   {name:'Essentials',icon:'🏡',description:'Everyday comforts',items:['chair','sofa','table','plant','lamp','bed','arcade']},
   {name:'Royal & Club',icon:'👑',description:'Exclusive-looking luxury pieces',items:['club_sofa','royal_throne']},
-  {name:'Novelty',icon:'🍦',description:'Machines and playful decorations',items:['ice_cream_machine','fridge','smoke_machine']},
+  {name:'Novelty',icon:'🍦',description:'Machines and playful decorations',items:['ice_cream_machine','fridge','vending_machine','teleporter','door','smoke_machine']},
   {name:'Winter Wonderland',icon:'🎄',description:'Seasonal festive furniture',items:['christmas_tree','christmas_sofa','christmas_fireplace','snowman','gift_stack','candy_cane_lamp','festive_rug']},
   {name:'Coin Exchange',icon:'💰',description:'Physical currency you can trade or redeem',items:['nickel','quarter','gold_bar']}
  ];
