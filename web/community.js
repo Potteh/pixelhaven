@@ -67,6 +67,7 @@ if(['admin','owner'].includes(user.role)){actions.append(button('⛔ Ban',()=>ac
 if(user.role==='owner'){body.append(field('Assign role',role));actions.append(button('Set role',()=>act('role',{role:role.value})))}
 }
 document.querySelectorAll('[data-game-action]').forEach(b=>b.addEventListener('click',async()=>{const action=b.dataset.gameAction;if(action==='rooms')document.getElementById('navigatorOpen')?.click();else if(action==='shop')document.getElementById('shopOpen')?.click();else if(action==='bag'||action==='avatar'){if(document.getElementById('hotelHub')?.hidden)document.getElementById('hubOpen')?.click();document.getElementById(action==='bag'?'hubTabInventory':'hubTabAvatar')?.click()}else if(['trade','report','staff'].includes(action))await open(action==='trade'?'trade':action)}));
+window.addEventListener('pixel:authenticated',()=>me().catch(e=>console.warn('Staff menu refresh failed',e)));
 me().catch(()=>{});
 window.pixelCommunity={open};
 })();
