@@ -232,6 +232,7 @@ function get(kind,rotation=0){
  cache.set(key,im);
  return im;
 }
+window.drawFurniturePreview=function(canvas,kind){const im=get(kind,0),g=canvas.getContext('2d');if(!im.complete){im.addEventListener('load',()=>{g.clearRect(0,0,128,128);g.drawImage(im,0,0,128,128)},{once:true})}else if(im.naturalWidth){g.clearRect(0,0,128,128);g.drawImage(im,0,0,128,128)}};
 const previous=window.drawFurniture;
 window.drawFurniture=function(f){
  if(!f?.kind)return previous?.(f);
