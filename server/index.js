@@ -168,11 +168,71 @@ app.post('/api/trades/:id/decision',auth,async(req,res)=>{const decision=req.bod
  for(const socket of io.sockets.sockets.values())if([trade.sender_id,trade.recipient_id].includes(socket.data.user?.id))socket.emit('trade:updated',{id:trade.id,status:decision});
  res.json({ok:true});
  }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}});
+// Live trading is bound to authenticated sockets. Both sides must lock and confirm.
+const liveTrades=new Map(),tradeBySocket=new Map();
+const publishTrade=t=>{for(const sid of [t.a,t.b])io.to(sid).emit('liveTrade:state',{id:t.id,partner:sid===t.a?t.bName:t.aName,own:sid===t.a?t.offerA:t.offerB,theirs:sid===t.a?t.offerB:t.offerA,locked:sid===t.a?t.lockA:t.lockB,partnerLocked:sid===t.a?t.lockB:t.lockA,confirmed:sid===t.a?t.confirmA:t.confirmB,partnerConfirmed:sid===t.a?t.confirmB:t.confirmA})};
+const endTrade=(t,message)=>{if(!t)return;liveTrades.delete(t.id);for(const sid of [t.a,t.b]){tradeBySocket.delete(sid);io.to(sid).emit('liveTrade:end',{message})}};
+const liveSocket=sid=>io.sockets.sockets.get(sid);
+const transferLive=async t=>{
+ const a=liveSocket(t.a),b=liveSocket(t.b);
+ if(!a||!b||a.data.user.id===b.data.user.id)throw Error('Player disconnected');
+ const client=await pool.connect();
+ try{await client.query('BEGIN');
+  const ids=[a.data.user.id,b.data.user.id].sort((x,y)=>x-y);
+  await client.query('SELECT id FROM users WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE',[ids]);
+  for(const [uid,items] of [[a.data.user.id,t.offerA],[b.data.user.id,t.offerB]]){
+   for(const [kind,qty] of Object.entries(items)){const r=await client.query('SELECT quantity FROM inventory WHERE user_id=$1 AND kind=$2 FOR UPDATE',[uid,kind]);if(!r.rowCount||r.rows[0].quantity<qty)throw Error('Not enough '+kind+' in inventory')}
+  }
+  for(const [from,to,items] of [[a.data.user.id,b.data.user.id,t.offerA],[b.data.user.id,a.data.user.id,t.offerB]]){
+   for(const [kind,qty] of Object.entries(items)){
+    await client.query('UPDATE inventory SET quantity=quantity-$1 WHERE user_id=$2 AND kind=$3',[qty,from,kind]);
+    await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,$3) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+EXCLUDED.quantity',[to,kind,qty]);
+   }
+  }
+  await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
+};
 const occupants=new Map();const positions=new Map();const poses=new Map();
 const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:displayUser(s.data.user),x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null}:null}).filter(Boolean);
 const leave=s=>{const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
 io.use(async(socket,next)=>{try{const p=jwt.verify(socket.handshake.auth.token,secret);const u=await getUser(p.id);if(!u)return next(new Error('Unauthorized'));const b=await pool.query('SELECT 1 FROM bans WHERE user_id=$1 AND (expires_at IS NULL OR expires_at>now())',[u.id]);if(b.rowCount)return next(new Error('Suspended'));socket.data.user=u;next();}catch{next(new Error('Unauthorized'));}});
 io.on('connection',s=>{let lastChat=0,lastMove=0;
+ s.on('liveTrade:invite',(targetId,ack=()=>{})=>{
+  const target=[...io.sockets.sockets.values()].find(v=>v.data.user?.id===Number(targetId)&&v.id!==s.id);
+  if(!target||target.data.roomId!==s.data.roomId||!s.data.roomId)return ack({error:'Player must be in your room'});
+  if(tradeBySocket.has(s.id)||tradeBySocket.has(target.id))return ack({error:'One player is already trading'});
+  const id=String(Date.now())+'-'+s.id.slice(0,6),t={id,a:s.id,b:target.id,aName:displayUser(s.data.user).username,bName:displayUser(target.data.user).username,offerA:{},offerB:{},lockA:false,lockB:false,confirmA:false,confirmB:false,accepted:false};
+  liveTrades.set(id,t);tradeBySocket.set(s.id,id);tradeBySocket.set(target.id,id);
+  target.emit('liveTrade:invite',{id,from:t.aName});
+  ack({ok:true});
+ });
+ s.on('liveTrade:respond',(accept,ack=()=>{})=>{
+  const t=liveTrades.get(tradeBySocket.get(s.id));if(!t||t.b!==s.id||t.accepted)return ack({error:'No pending invitation'});
+  if(!accept){endTrade(t,'Trade declined');return ack({ok:true})}
+  t.accepted=true;publishTrade(t);ack({ok:true});
+ });
+ s.on('liveTrade:offer',(items,ack=()=>{})=>{
+  const t=liveTrades.get(tradeBySocket.get(s.id));if(!t?.accepted||t.lockA||t.lockB)return ack({error:'Trade is locked'});
+  const parsed=tradeItems(items);if(!parsed)return ack({error:'Invalid items'});
+  if(s.id===t.a)t.offerA=parsed;else t.offerB=parsed;
+  t.confirmA=t.confirmB=false;publishTrade(t);ack({ok:true});
+ });
+ s.on('liveTrade:lock',(_,ack=()=>{})=>{
+  const t=liveTrades.get(tradeBySocket.get(s.id));if(!t?.accepted)return ack({error:'No active trade'});
+  if(s.id===t.a)t.lockA=true;else t.lockB=true;
+  publishTrade(t);ack({ok:true});
+ });
+ s.on('liveTrade:confirm',async(_,ack=()=>{})=>{
+  const t=liveTrades.get(tradeBySocket.get(s.id));if(!t?.accepted||!t.lockA||!t.lockB)return ack({error:'Both players must lock offers first'});
+  if(t.settling)return ack({error:'Trade is processing'});
+  if(s.id===t.a)t.confirmA=true;else t.confirmB=true;
+  if(!t.confirmA||!t.confirmB){publishTrade(t);return ack({ok:true})}
+  t.settling=true;
+  try{await transferLive(t);endTrade(t,'Trade completed!');ack({ok:true})}
+  catch(e){endTrade(t,'Trade failed: '+e.message);ack({error:e.message})}
+ });
+ s.on('liveTrade:cancel',()=>endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled'));
+ s.on('disconnect',()=>endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Other player disconnected'));
  s.on('room:join',async(id,ack=()=>{})=>{try{id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
  // Server-authoritative tile walking: one adjacent tile every 240 ms.
  // A new click cancels the previous route; players cannot teleport by sending coordinates.
