@@ -155,6 +155,7 @@ window.pixelCommunity={open};
 window.addEventListener('pixel:authenticated',()=>{if(!shell.hidden&&current==='social')select('social').catch(console.warn)});
 window.addEventListener('pixel:social-update',()=>{refreshSocialBadge().catch(console.warn);if(!shell.hidden&&current==='social')select('social').catch(console.warn)});
 window.addEventListener('pixel:authenticated',()=>refreshSocialBadge().catch(console.warn));
+window.addEventListener('pixel:social-message',()=>{if(shell.hidden)notifySocial('✉️ New private message')});
 setInterval(()=>{if(localStorage.getItem('pixel_token'))refreshSocialBadge().catch(()=>{})},30000);
 window.pixelShowPlayer=async player=>{
  try{
