@@ -20,6 +20,22 @@ for(const tab of tabs){
   if(next>=0){e.preventDefault();activate(tabs[next].dataset.hub,true);}
  });
 }
+const hub=document.getElementById('hotelHub'),open=document.getElementById('hubOpen'),close=document.getElementById('hubClose');
+let previousFocus=null;
+function showHub(name='chat'){
+ previousFocus=document.activeElement;
+ hub.hidden=false;open.setAttribute('aria-expanded','true');
+ activate(name);
+ const selected=document.querySelector('.hubTab[data-hub="'+name+'"]');
+ selected?.focus();
+}
+function hideHub(){
+ hub.hidden=true;open.setAttribute('aria-expanded','false');
+ if(hub.contains(document.activeElement))open.focus();
+}
+open.addEventListener('click',()=>hub.hidden?showHub():hideHub());
+close.addEventListener('click',hideHub);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!hub.hidden){e.preventDefault();hideHub();}});
 activate('chat');
 console.info('[Pixel Haven] Unified hotel panel ready');
 })();
