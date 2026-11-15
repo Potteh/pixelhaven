@@ -160,6 +160,10 @@ function renderCatalog(){
  collections.forEach((group,i)=>{const button=document.createElement('button');button.type='button';button.textContent=group.icon+' '+group.name;button.setAttribute('aria-pressed','false');button.onclick=()=>show(i);tabs.append(button)});
  show(0);
 }
+const shopWindow=document.getElementById('shopWindow');
+document.getElementById('shopOpen')?.addEventListener('click',()=>{shopWindow.hidden=false;document.getElementById('shopClose')?.focus()});
+document.getElementById('shopClose')?.addEventListener('click',()=>{shopWindow.hidden=true;document.getElementById('shopOpen')?.focus()});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!shopWindow.hidden){shopWindow.hidden=true;document.getElementById('shopOpen')?.focus()}});
 function identity(){$('#identity').textContent=me.username+' · 🪙 '+me.coins}
 function avatarEditor(){
  const editor=$('#avatarEditor');editor.replaceChildren();
