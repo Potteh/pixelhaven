@@ -82,3 +82,27 @@ main{grid-template-columns:230px minmax(0,1fr) 205px;max-width:1900px}
 #avatarEditor .wardrobeViews button{padding:5px 13px}
 #avatarEditor .wardrobeViews span{font-size:11px;font-weight:800;min-width:52px;text-align:center;color:#f4d7a0}
 #avatarEditor .wardrobeStatus{text-align:center;font-size:11px;color:#9cdec2;margin:5px 0}
+
+/* Pixel Haven v6 themed furniture shop */
+.shopOpen{width:100%;margin:12px 0;background:linear-gradient(135deg,#ffe6aa,#df9e4d);font-size:14px}
+.shopWindow[hidden]{display:none!important}
+.shopWindow{position:fixed;inset:6vh max(16px,calc((100vw - 1020px)/2));z-index:20;overflow:auto;margin:0;padding:18px;background:linear-gradient(145deg,#283c59,#101c32 80%);border:2px solid #e4bd7c;border-radius:18px;box-shadow:0 0 0 100vmax #060d19b8,0 20px 70px #000a}
+.shopTop{display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:-18px;z-index:2;background:#23344c;padding:12px 0;border-bottom:1px solid #ad946f}
+.shopTop h3{font-size:20px;margin:0}
+.shopTop button{background:#634052;color:#fff0da}
+.catalogHero{padding:20px;border-radius:14px;background:radial-gradient(circle at 90% 20%,#5c748b,#354d6d 45%,#27384e);border:1px solid #9f9278;margin:16px 0}
+.catalogEyebrow{font-size:10px;letter-spacing:2px;color:#f9c878;font-weight:900}
+.catalogHero strong{display:block;font:700 29px Georgia,serif;color:#fff0cb;margin:7px 0}
+.catalogHero small{display:block;color:#dce8f0}
+.catalogTabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.catalogTabs button{background:#253951;color:#e8d6b6;border:1px solid #8e795e;box-shadow:none}
+.catalogTabs button.active{background:linear-gradient(#ffe6b2,#dca257);color:#382d28}
+.catalogCollectionTitle{font-size:14px;color:#f4d39c;font-weight:700;margin:15px 0}
+.catalogGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.catalogCard{display:flex;flex-direction:column;gap:7px;padding:10px;background:linear-gradient(#31445d,#1d2d44);border:1px solid #697e92;border-radius:12px}
+.catalogCard strong{font-size:13px;color:#fff1d8;min-height:32px}
+.catalogPicture{height:134px;background:radial-gradient(ellipse at 50% 60%,#5e748a,#25364b);border:1px solid #617487;border-radius:9px;display:grid;place-items:center}
+.catalogPicture canvas{width:128px;height:128px;background:transparent!important;image-rendering:auto}
+.catalogPrice{color:#f7ce7c;font-size:13px;font-weight:900}
+.catalogCard button{margin-top:auto}
+@media(max-width:700px){.shopWindow{inset:12px;padding:10px}.catalogGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalogHero strong{font-size:23px}.catalogTabs button{font-size:11px;padding:8px}}
