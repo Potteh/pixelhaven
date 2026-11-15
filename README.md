@@ -116,3 +116,9 @@ Create a room with customizable wall and floor colors, flooring patterns (checke
 
 Room owners see **Kick** next to other guests in the room's player list. Kicking removes all selected socket's presence immediately and prevents that account from rejoining the same room for 10 minutes (in-memory cooldown, reset on server restart). Guests receive an explanation and return to the hotel lobby. Room ownership is verified on the server; players cannot kick the room owner. Changing an open room to locked removes guests who are not the owner.
 
+
+### Locked-room entry requests
+Guests can discover locked rooms in the hotel navigator and click **Request Entry**. Owners review pending requests from **Your Rooms → Entry Requests**, approving or denying each guest. Approvals are stored in PostgreSQL and allow that guest to join the locked room; a guest receives a live decision notification. Kicking a guest revokes their approval and temporarily blocks re-entry. Changing an open room to locked clears prior approvals and removes existing non-owner guests. Cosmetic edits to already locked rooms do not revoke approvals.
+
+### Staff chat logs
+Moderators, admins, and owners can open **Staff → Chat Logs** to review saved room messages, filter by room ID, user ID, or message text, and page through older messages. Each entry shows username, room, timestamp, and message. The API requires authenticated staff permissions, caps results at 100 per request, and uses parameterized SQL. This covers persisted room chat, not private direct messages. Chat history is retained in the existing messages table; configure retention and staff access policies as appropriate.
