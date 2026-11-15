@@ -71,3 +71,10 @@ INSERT INTO badge_definitions(code,name,image_path) VALUES('ADM','Pixel Staff','
 ALTER TABLE users ADD COLUMN IF NOT EXISTS motto VARCHAR(120) NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS profile_equipped_badges (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code VARCHAR(16) NOT NULL, position SMALLINT NOT NULL CHECK(position BETWEEN 1 AND 3), PRIMARY KEY(user_id,code), UNIQUE(user_id,position), FOREIGN KEY(user_id,code) REFERENCES user_badges(user_id,code) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS profile_achievements (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code VARCHAR(32) NOT NULL, earned_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY(user_id,code));
+
+-- Furniture Catalog 3.0: inventory-safe limited releases and purchase audit.
+CREATE TABLE IF NOT EXISTS catalog_limited_stock (kind VARCHAR(40) PRIMARY KEY, remaining INTEGER NOT NULL CHECK(remaining >= 0), initial_stock INTEGER NOT NULL CHECK(initial_stock >= 0));
+INSERT INTO catalog_limited_stock(kind,remaining,initial_stock) VALUES
+ ('neon_arcade',250,250),('golden_fountain',100,100),('autumn_throne',175,175)
+ ON CONFLICT(kind) DO NOTHING;
+CREATE TABLE IF NOT EXISTS catalog_purchases (id BIGSERIAL PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,kind VARCHAR(40) NOT NULL,price INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
