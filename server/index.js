@@ -36,12 +36,12 @@ app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
 app.get('/api/inventory',auth,async(req,res)=>{try{res.json((await pool.query('SELECT kind,quantity FROM inventory WHERE user_id=$1',[req.user.id])).rows);}catch(e){fail(res,e);}});
 app.post('/api/buy',auth,async(req,res)=>{const kind=safe(req.body.kind,30),price=CATALOG[kind];if(!price)return res.status(400).json({error:'Unknown item'});const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 AND coins >= $1 RETURNING coins',[price,req.user.id]);if(!r.rowCount){await client.query('ROLLBACK');return res.status(400).json({error:'Not enough coins'});}await client.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[req.user.id,kind]);await client.query('COMMIT');res.json({coins:r.rows[0].coins});}catch(e){await client.query('ROLLBACK');fail(res,e);}finally{client.release();}});
 app.post('/api/mod/ban',auth,async(req,res)=>{try{if(req.user.role!=='admin')return res.sendStatus(403);const id=Number(req.body.userId);if(!Number.isInteger(id)||id===req.user.id)return res.status(400).json({error:'Invalid target'});await pool.query('INSERT INTO bans(user_id,reason) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET reason=$2,expires_at=NULL',[id,safe(req.body.reason,240)]);for(const s of io.sockets.sockets.values())if(s.data.user?.id===id)s.disconnect(true);res.json({ok:true});}catch(e){fail(res,e);}});
-const occupants=new Map();const positions=new Map();
-const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:s.data.user,x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4}:null}).filter(Boolean);
-const leave=s=>{const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
+const occupants=new Map();const positions=new Map();const poses=new Map();
+const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:s.data.user,x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null}:null}).filter(Boolean);
+const leave=s=>{const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
 io.use(async(socket,next)=>{try{const p=jwt.verify(socket.handshake.auth.token,secret);const u=await getUser(p.id);if(!u)return next(new Error('Unauthorized'));const b=await pool.query('SELECT 1 FROM bans WHERE user_id=$1 AND (expires_at IS NULL OR expires_at>now())',[u.id]);if(b.rowCount)return next(new Error('Suspended'));socket.data.user=u;next();}catch{next(new Error('Unauthorized'));}});
 io.on('connection',s=>{let lastChat=0,lastMove=0;
- s.on('room:join',async(id,ack=()=>{})=>{try{id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:s.data.user,x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
+ s.on('room:join',async(id,ack=()=>{})=>{try{id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:s.data.user,x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
  // Server-authoritative tile walking: one adjacent tile every 240 ms.
  // A new click cancels the previous route; players cannot teleport by sending coordinates.
  let walkTimer=null;
@@ -51,6 +51,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    x=Number(x);y=Number(y);
    if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9||!s.data.roomId)return;
    stopWalking();
+   if(poses.has(s.id)){poses.delete(s.id);io.to('room:'+s.data.roomId).emit('player:pose',{socketId:s.id,pose:null});}
    const roomId=s.data.roomId;
    const current=positions.get(s.id);if(!current)return;
    // Orthogonal grid routing around persisted furniture. Decorative lobby art
@@ -89,9 +90,29 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  });
  s.on('disconnecting',stopWalking);
  s.on('room:join',stopWalking);
+ s.on('player:sit',async(itemId,ack=()=>{})=>{
+   const roomId=s.data.roomId;if(!roomId)return ack({error:'Join a room first'});
+   const item=(await pool.query("SELECT id,kind,x,y FROM furniture WHERE id=$1 AND room_id=$2",[Number(itemId),roomId])).rows[0];
+   if(!item||!['chair','sofa','bed'].includes(item.kind))return ack({error:'Not a seat'});
+   if([...poses.entries()].some(([sid,pose])=>sid!==s.id&&pose?.seatId===item.id))return ack({error:'Seat occupied'});
+   stopWalking();
+   positions.set(s.id,{x:item.x,y:item.y});
+   const pose={type:'sit',seatId:item.id,kind:item.kind};
+   poses.set(s.id,pose);
+   io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:item.x,y:item.y});
+   io.to('room:'+roomId).emit('player:pose',{socketId:s.id,pose});
+   ack({ok:true});
+ });
+ s.on('player:stand',(_,ack=()=>{})=>{if(!s.data.roomId)return ack({error:'Not in a room'});poses.delete(s.id);io.to('room:'+s.data.roomId).emit('player:pose',{socketId:s.id,pose:null});ack({ok:true})});
+ let lastEmote=0;
+ s.on('player:emote',(name,ack=()=>{})=>{
+   if(!s.data.roomId||!['wave','dance','laugh','cheer'].includes(name))return ack({error:'Invalid emote'});
+   if(Date.now()-lastEmote<800)return ack({error:'Wait a moment'});
+   lastEmote=Date.now();io.to('room:'+s.data.roomId).emit('player:emote',{socketId:s.id,name,until:Date.now()+3500});ack({ok:true});
+ });
  s.on('chat:send',async(body,ack=()=>{})=>{try{const now=Date.now();if(now-lastChat<900)return ack({error:'Slow down'});lastChat=now;body=safe(body,240);if(!body||!s.data.roomId)return ack({error:'Cannot send'});await pool.query('INSERT INTO messages(room_id,user_id,body) VALUES($1,$2,$3)',[s.data.roomId,s.data.user.id,body]);io.to(`room:${s.data.roomId}`).emit('chat:message',{username:s.data.user.username,userId:s.data.user.id,body,socketId:s.id});ack({ok:true});}catch(e){console.error(e);ack({error:'Chat failed'});}});
  s.on('furniture:place',async({kind,x,y}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3',[id,x,y]);if(occ.rowCount){await client.query('ROLLBACK');return ack({error:'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y) VALUES($1,$2,$3,$4,$5) RETURNING id,kind,x,y,rotation',[id,s.data.user.id,kind,x,y])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
- s.on('furniture:remove',async(itemId,ack=()=>{})=>{try{const id=s.data.roomId;const r=await pool.query('DELETE FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3 RETURNING kind',[Number(itemId),id,s.data.user.id]);if(!r.rowCount)return ack({error:'Not allowed'});await pool.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[s.data.user.id,r.rows[0].kind]);io.to(`room:${id}`).emit('furniture:removed',Number(itemId));ack({ok:true});}catch(e){console.error(e);ack({error:'Remove failed'});}});
+ s.on('furniture:remove',async(itemId,ack=()=>{})=>{try{const id=s.data.roomId;const r=await pool.query('DELETE FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3 RETURNING kind',[Number(itemId),id,s.data.user.id]);if(!r.rowCount)return ack({error:'Not allowed'});await pool.query('INSERT INTO inventory(user_id,kind,quantity) VALUES($1,$2,1) ON CONFLICT(user_id,kind) DO UPDATE SET quantity=inventory.quantity+1',[s.data.user.id,r.rows[0].kind]);for(const [sid,pose] of poses)if(pose?.seatId===Number(itemId)){poses.delete(sid);io.to('room:'+id).emit('player:pose',{socketId:sid,pose:null});}io.to(`room:${id}`).emit('furniture:removed',Number(itemId));ack({ok:true});}catch(e){console.error(e);ack({error:'Remove failed'});}});
  s.on('disconnect',()=>leave(s));
 });
 app.get('/health',(_req,res)=>res.json({ok:true}));
