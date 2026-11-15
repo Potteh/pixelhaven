@@ -23,7 +23,7 @@ app.use(express.static(root));
 const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25};
 const safe=(s,max=240)=>String(s??'').trim().slice(0,max);
 const token=u=>jwt.sign({id:u.id},secret,{expiresIn:'7d'});
-const getUser=async id=>(await pool.query('SELECT id,username,coins,role,avatar FROM users WHERE id=$1',[id])).rows[0];
+const getUser=async id=>{const u=(await pool.query('SELECT id,username,coins,role,avatar,active_profile_id FROM users WHERE id=$1',[id])).rows[0];if(!u)return u;const p=u.active_profile_id?(await pool.query('SELECT id,name,avatar FROM game_profiles WHERE id=$1 AND user_id=$2',[u.active_profile_id,id])).rows[0]:null;u.profile=p||null;return u};
 const auth=async(req,res,next)=>{try{const t=(req.headers.authorization||'').replace(/^Bearer /,'');const p=jwt.verify(t,secret);req.user=await getUser(p.id);if(!req.user)return res.status(401).json({error:'Unauthorized'});next();}catch{return res.status(401).json({error:'Unauthorized'});}};
 const fail=(res,e)=>{console.error(e);res.status(500).json({error:'Server error'});};
 app.post('/api/register',async(req,res)=>{try{const username=safe(req.body.username,24),password=String(req.body.password||'');if(!/^[a-zA-Z0-9_]{3,24}$/.test(username)||password.length<8||password.length>128)return res.status(400).json({error:'Username: 3-24 letters/numbers/underscores; password: 8-128 characters'});const hash=await bcrypt.hash(password,12);const r=await pool.query('INSERT INTO users(username,password_hash) VALUES($1,$2) RETURNING id',[username,hash]);res.json({token:token(r.rows[0]),user:await getUser(r.rows[0].id)});}catch(e){if(e.code==='23505')return res.status(409).json({error:'Username already exists'});fail(res,e);}});
@@ -36,8 +36,8 @@ app.patch('/api/avatar',auth,async(req,res)=>{
   const options={hairstyle:['short','spiky','long','buzz','sidepart'],face:['smile','neutral','happy','wink'],outfit:['tee','hoodie','jacket','sweater','vest','dress'],accessory:['none','glasses','cap','headphones','beanie','sunglasses'],pants:['jeans','chinos','shorts','skirt'],shoes:['sneakers','boots','loafers'],pantsColor:colors,shoeColor:colors};
   if(!a||!['skin','shirt','hair'].every(k=>colors.includes(a[k]))||Object.entries(options).some(([k,values])=>a[k]!==undefined&&!values.includes(a[k])))return res.status(400).json({error:'Invalid avatar options'});
   const avatar=Object.fromEntries([...['skin','shirt','hair'].map(k=>[k,a[k]]),...Object.entries(options).map(([k,values])=>[k,a[k]||({pants:'jeans',shoes:'sneakers',pantsColor:'#4b86e8',shoeColor:'#1c2535'}[k]||values[0])])]);
-  await pool.query('UPDATE users SET avatar=$1 WHERE id=$2',[JSON.stringify(avatar),req.user.id]);
-  const user=await getUser(req.user.id);req.user.avatar=user.avatar;
+  if(req.user.active_profile_id)await pool.query('UPDATE game_profiles SET avatar=$1 WHERE id=$2 AND user_id=$3',[JSON.stringify(avatar),req.user.active_profile_id,req.user.id]);else await pool.query('UPDATE users SET avatar=$1 WHERE id=$2',[JSON.stringify(avatar),req.user.id]);
+  const user=await getUser(req.user.id);req.user.avatar=user.profile?.avatar&&Object.keys(user.profile.avatar).length?user.profile.avatar:user.avatar;
   for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===req.user.id){
     socket.data.user.avatar=user.avatar;
     if(socket.data.roomId)io.to('room:'+socket.data.roomId).emit('player:avatar',{socketId:socket.id,avatar:user.avatar});
@@ -80,6 +80,8 @@ const tradeItems=raw=>{
  return items;
 };
 async function ensureCommunityTables(){
+ await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS active_profile_id INTEGER');
+ await pool.query(`CREATE TABLE IF NOT EXISTS game_profiles(id SERIAL PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,name VARCHAR(24) NOT NULL,avatar JSONB NOT NULL DEFAULT '{}'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),UNIQUE(user_id,name))`);
  await pool.query(`CREATE TABLE IF NOT EXISTS player_reports(id BIGSERIAL PRIMARY KEY, reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL, target_id INTEGER REFERENCES users(id) ON DELETE SET NULL, category TEXT NOT NULL, details VARCHAR(1000) NOT NULL, status TEXT NOT NULL DEFAULT 'open', assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), resolved_at TIMESTAMPTZ)`);
  await pool.query(`CREATE TABLE IF NOT EXISTS player_warnings(id BIGSERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id INTEGER REFERENCES users(id) ON DELETE SET NULL, reason VARCHAR(500) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
  await pool.query(`CREATE TABLE IF NOT EXISTS staff_audit(id BIGSERIAL PRIMARY KEY, actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL, target_id INTEGER REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
@@ -89,6 +91,23 @@ async function ensureCommunityTables(){
  if(ownerName){await pool.query("UPDATE users SET role='owner' WHERE lower(username)=lower($1) AND role <> 'owner'",[ownerName]);}
 }
 ensureCommunityTables().catch(e=>{console.error('Community schema initialization failed',e);process.exit(1)});
+const displayUser=u=>({...u,username:u.profile?.name||u.username,accountName:u.username,avatar:u.profile?.avatar&&Object.keys(u.profile.avatar).length?u.profile.avatar:u.avatar});
+app.get('/api/profiles',auth,async(req,res)=>{try{res.json((await pool.query('SELECT id,name,avatar FROM game_profiles WHERE user_id=$1 ORDER BY id',[req.user.id])).rows)}catch(e){fail(res,e)}});
+app.post('/api/profiles',auth,async(req,res)=>{try{
+ const name=safe(req.body.name,24);
+ if(!/^[a-zA-Z0-9_]{3,24}$/.test(name))return res.status(400).json({error:'Profile name must be 3–24 letters, digits, or underscores'});
+ const c=await pool.query('SELECT count(*)::int n FROM game_profiles WHERE user_id=$1',[req.user.id]);
+ if(c.rows[0].n>=5)return res.status(400).json({error:'Maximum five profiles'});
+ const r=await pool.query('INSERT INTO game_profiles(user_id,name,avatar) VALUES($1,$2,$3) RETURNING id,name,avatar',[req.user.id,name,JSON.stringify(req.user.avatar)]);res.json(r.rows[0]);
+ }catch(e){if(e.code==='23505')return res.status(409).json({error:'Profile already exists'});fail(res,e)}});
+app.post('/api/profiles/activate',auth,async(req,res)=>{try{
+ const id=req.body.id===null?null:Number(req.body.id);
+ if(id!==null){const p=await pool.query('SELECT 1 FROM game_profiles WHERE id=$1 AND user_id=$2',[id,req.user.id]);if(!p.rowCount)return res.sendStatus(404)}
+ await pool.query('UPDATE users SET active_profile_id=$1 WHERE id=$2',[id,req.user.id]);
+ const updated=await getUser(req.user.id);
+ for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===req.user.id){socket.data.user=updated;if(socket.data.roomId)io.to('room:'+socket.data.roomId).emit('player:identity',{socketId:socket.id,user:displayUser(updated)})}
+ res.json(updated);
+ }catch(e){fail(res,e)}});
 app.get('/api/community/users',auth,async(req,res)=>{try{const q=safe(req.query.q,40);if(q.length<2)return res.json([]);res.json((await pool.query("SELECT id,username,role FROM users WHERE username ILIKE $1 ORDER BY username LIMIT 20",['%'+q+'%'])).rows)}catch(e){fail(res,e)}});
 app.post('/api/reports',auth,async(req,res)=>{try{
  const target=Number(req.body.targetId),category=safe(req.body.category,50),details=safe(req.body.details,1000);
@@ -150,11 +169,11 @@ app.post('/api/trades/:id/decision',auth,async(req,res)=>{const decision=req.bod
  res.json({ok:true});
  }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}});
 const occupants=new Map();const positions=new Map();const poses=new Map();
-const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:s.data.user,x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null}:null}).filter(Boolean);
+const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:displayUser(s.data.user),x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null}:null}).filter(Boolean);
 const leave=s=>{const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
 io.use(async(socket,next)=>{try{const p=jwt.verify(socket.handshake.auth.token,secret);const u=await getUser(p.id);if(!u)return next(new Error('Unauthorized'));const b=await pool.query('SELECT 1 FROM bans WHERE user_id=$1 AND (expires_at IS NULL OR expires_at>now())',[u.id]);if(b.rowCount)return next(new Error('Suspended'));socket.data.user=u;next();}catch{next(new Error('Unauthorized'));}});
 io.on('connection',s=>{let lastChat=0,lastMove=0;
- s.on('room:join',async(id,ack=()=>{})=>{try{id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:s.data.user,x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
+ s.on('room:join',async(id,ack=()=>{})=>{try{id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
  // Server-authoritative tile walking: one adjacent tile every 240 ms.
  // A new click cancels the previous route; players cannot teleport by sending coordinates.
  let walkTimer=null;
@@ -223,7 +242,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    if(Date.now()-lastEmote<800)return ack({error:'Wait a moment'});
    lastEmote=Date.now();io.to('room:'+s.data.roomId).emit('player:emote',{socketId:s.id,name,until:Date.now()+3500});ack({ok:true});
  });
- s.on('chat:send',async(body,ack=()=>{})=>{try{const now=Date.now();if(now-lastChat<900)return ack({error:'Slow down'});lastChat=now;body=safe(body,240);if(!body||!s.data.roomId)return ack({error:'Cannot send'});await pool.query('INSERT INTO messages(room_id,user_id,body) VALUES($1,$2,$3)',[s.data.roomId,s.data.user.id,body]);io.to(`room:${s.data.roomId}`).emit('chat:message',{username:s.data.user.username,userId:s.data.user.id,body,socketId:s.id});ack({ok:true});}catch(e){console.error(e);ack({error:'Chat failed'});}});
+ s.on('chat:send',async(body,ack=()=>{})=>{try{const now=Date.now();if(now-lastChat<900)return ack({error:'Slow down'});lastChat=now;body=safe(body,240);if(!body||!s.data.roomId)return ack({error:'Cannot send'});await pool.query('INSERT INTO messages(room_id,user_id,body) VALUES($1,$2,$3)',[s.data.roomId,s.data.user.id,body]);io.to(`room:${s.data.roomId}`).emit('chat:message',{username:displayUser(s.data.user).username,userId:s.data.user.id,body,socketId:s.id});ack({ok:true});}catch(e){console.error(e);ack({error:'Chat failed'});}});
  s.on('furniture:place',async({kind,x,y}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3',[id,x,y]);if(occ.rowCount){await client.query('ROLLBACK');return ack({error:'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y) VALUES($1,$2,$3,$4,$5) RETURNING id,kind,x,y,rotation',[id,s.data.user.id,kind,x,y])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
  s.on('furniture:rotate',async(itemId,ack=()=>{})=>{try{
    const roomId=s.data.roomId,id=Number(itemId);
