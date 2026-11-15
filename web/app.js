@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s),canvas=$('#game'),ctx=canvas.getContext('2d');
 let token=localStorage.getItem('pixel_token'),me=null,socket=null,room=null,players=new Map(),furniture=[],selected=null,rotateMode=false,rotationTarget=null,catalog={},inventory=[],authRegister=false,chatBubbles=new Map();
 const colors=['#e8ad7d','#a96b46','#f2cba5','#6d4535','#4b86e8','#ef7d82','#72c49a','#9b7de5','#493323','#1c2535','#f5ca59','#ffffff'];
-const emoji={chair:'🪑',sofa:'🛋️',table:'🪵',plant:'🪴',lamp:'💡',bed:'🛏️',arcade:'🕹️'};
+const emoji={chair:'🪑',sofa:'🛋️',table:'🪵',plant:'🪴',lamp:'💡',bed:'🛏️',arcade:'🕹️',club_sofa:'🛋️',royal_throne:'👑',ice_cream_machine:'🍦',smoke_machine:'🌫️',christmas_tree:'🎄',christmas_sofa:'🛋️',christmas_fireplace:'🔥',snowman:'⛄',gift_stack:'🎁',candy_cane_lamp:'🍬',festive_rug:'❄️'};
 function toast(s){$('#toast').textContent=s;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',3200)}
 async function api(url,method='GET',data){const r=await fetch('/api'+url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data?JSON.stringify(data):undefined});const j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}
 function tile(x,y,z=0){return {x:500+(x-y)*43,y:118+(x+y)*24-z}}
@@ -126,7 +126,40 @@ function join(id){socket.emit('room:join',id,data=>{if(data.error)return toast(d
 function connect(){socket=io({auth:{token}});socket.on('connect',()=>join(1));socket.on('connect_error',e=>toast(e.message));socket.on('player:joined',p=>{players.set(p.socketId,p);updateGuests()});socket.on('player:left',id=>{players.delete(id);chatBubbles.delete(id);updateGuests()});socket.on('player:avatar',p=>{const a=players.get(p.socketId);if(a)a.user.avatar=p.avatar});socket.on('player:pose',p=>{const a=players.get(p.socketId);if(a)a.pose=p.pose});socket.on('player:emote',p=>{const a=players.get(p.socketId);if(a)a.emote={name:p.name,until:p.until}});socket.on('player:moved',p=>{const a=players.get(p.socketId);if(a){a.x=p.x;a.y=p.y}});socket.on('chat:message',m=>{if(m.socketId&&players.has(m.socketId)){const now=Date.now(),entry=chatBubbles.get(m.socketId)||{messages:[]};entry.messages=entry.messages.filter(v=>v.until>now);entry.messages.push({text:String(m.body||''),until:now+7500});entry.messages=entry.messages.slice(-3);chatBubbles.set(m.socketId,entry)}});socket.on('furniture:added',f=>furniture.push(f));socket.on('furniture:rotated',data=>{const f=furniture.find(item=>item.id===data.id);if(f)f.rotation=data.rotation;});socket.on('furniture:removed',id=>{furniture=furniture.filter(f=>f.id!==id)});socket.on('disconnect',()=>{$('#online').textContent='Disconnected'})}
 async function loadRooms(){const rooms=await api('/rooms');$('#rooms').replaceChildren();for(const r of rooms){const b=document.createElement('div');b.className='roomButton';b.textContent='🚪 '+r.name;const s=document.createElement('small');s.textContent=r.description||'Visit this room';b.append(s);b.onclick=()=>join(r.id);$('#rooms').append(b)}}
 async function loadInventory(){inventory=await api('/inventory');$('#inventory').replaceChildren();for(const item of inventory.filter(i=>i.quantity>0)){const b=document.createElement('button');b.className='invItem'+(selected===item.kind?' selected':'');b.textContent=(emoji[item.kind]||'📦')+' '+item.kind+' ×'+item.quantity;b.onclick=()=>{selected=selected===item.kind?null:item.kind;$('#placement').textContent=selected?'Placing '+selected+' — click a tile':'';loadInventory()};$('#inventory').append(b)}}
-function renderCatalog(){for(const [kind,price] of Object.entries(catalog)){const b=document.createElement('div');b.className='shopItem';b.textContent=(emoji[kind]||'📦')+' '+kind;const s=document.createElement('small');s.textContent=price+' coins · Click to buy';b.append(s);b.onclick=async()=>{try{const r=await api('/buy','POST',{kind});me.coins=r.coins;identity();await loadInventory();toast('Purchased '+kind)}catch(e){toast(e.message)}};$('#catalog').append(b)}}
+function renderCatalog(){
+ const root=$('#catalog');root.replaceChildren();
+ const collections=[
+  {name:'Essentials',icon:'🏡',description:'Everyday comforts',items:['chair','sofa','table','plant','lamp','bed','arcade']},
+  {name:'Royal & Club',icon:'👑',description:'Exclusive-looking luxury pieces',items:['club_sofa','royal_throne']},
+  {name:'Novelty',icon:'🍦',description:'Machines and playful decorations',items:['ice_cream_machine','smoke_machine']},
+  {name:'Winter Wonderland',icon:'🎄',description:'Seasonal festive furniture',items:['christmas_tree','christmas_sofa','christmas_fireplace','snowman','gift_stack','candy_cane_lamp','festive_rug']}
+ ];
+ const header=document.createElement('div');header.className='catalogHero';
+ header.innerHTML='<div class="catalogEyebrow">PIXEL HAVEN • FURNI SHOP</div><strong>Decorate your world</strong><small>Discover themed collections and collect original furniture.</small>';
+ const tabs=document.createElement('div');tabs.className='catalogTabs';
+ const grid=document.createElement('div');grid.className='catalogGrid';
+ const title=document.createElement('div');title.className='catalogCollectionTitle';
+ root.append(header,tabs,title,grid);
+ let current=0;
+ function show(index){
+  current=index;tabs.querySelectorAll('button').forEach((btn,i)=>{btn.classList.toggle('active',i===index);btn.setAttribute('aria-pressed',String(i===index))});
+  const group=collections[index];title.textContent=group.icon+' '+group.name+' · '+group.description;grid.replaceChildren();
+  for(const kind of group.items){
+   if(catalog[kind]===undefined)continue;
+   const item=document.createElement('article');item.className='catalogCard';
+   const picture=document.createElement('div');picture.className='catalogPicture';
+   const preview=document.createElement('canvas');preview.width=128;preview.height=128;preview.setAttribute('aria-label',kind.replaceAll('_',' ')+' preview');picture.append(preview);
+   window.drawFurniturePreview?.(preview,kind);
+   const name=document.createElement('strong');name.textContent=kind.replaceAll('_',' ').replace(/\\b\\w/g,c=>c.toUpperCase());
+   const price=document.createElement('span');price.className='catalogPrice';price.textContent='🪙 '+catalog[kind];
+   const buy=document.createElement('button');buy.type='button';buy.textContent='Buy';
+   buy.onclick=async()=>{buy.disabled=true;try{const result=await api('/buy','POST',{kind});me.coins=result.coins;identity();await loadInventory();toast('Purchased '+name.textContent)}catch(e){toast(e.message)}finally{buy.disabled=false}};
+   item.append(picture,name,price,buy);grid.append(item);
+  }
+ }
+ collections.forEach((group,i)=>{const button=document.createElement('button');button.type='button';button.textContent=group.icon+' '+group.name;button.setAttribute('aria-pressed','false');button.onclick=()=>show(i);tabs.append(button)});
+ show(0);
+}
 function identity(){$('#identity').textContent=me.username+' · 🪙 '+me.coins}
 function avatarEditor(){
  const editor=$('#avatarEditor');editor.replaceChildren();
