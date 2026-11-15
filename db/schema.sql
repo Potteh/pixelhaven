@@ -25,3 +25,36 @@ CREATE TABLE IF NOT EXISTS room_entry_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_room_entry_requests_owner ON room_entry_requests(room_id,status);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+
+-- Social relationships and private messages (account-level, shared across profiles).
+CREATE TABLE IF NOT EXISTS social_friendships (
+ user_low INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ user_high INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ PRIMARY KEY(user_low,user_high), CHECK(user_low<user_high)
+);
+CREATE TABLE IF NOT EXISTS social_blocks (
+ blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ PRIMARY KEY(blocker_id,blocked_id), CHECK(blocker_id<>blocked_id)
+);
+CREATE TABLE IF NOT EXISTS social_messages (
+ id BIGSERIAL PRIMARY KEY,
+ sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ body VARCHAR(1000) NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_social_messages_pair ON social_messages(sender_id,recipient_id,id DESC);
+CREATE TABLE IF NOT EXISTS social_message_reports (
+ id BIGSERIAL PRIMARY KEY,
+ reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ message_id BIGINT NOT NULL REFERENCES social_messages(id) ON DELETE CASCADE,
+ reason VARCHAR(500) NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ UNIQUE(reporter_id,message_id)
+);
