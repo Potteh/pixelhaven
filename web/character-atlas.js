@@ -114,21 +114,25 @@ window.drawAvatar=function(p){
  const now=performance.now(),dt=Math.min((now-m.last)/1000,.06);m.last=now;
  const dx=p.x-m.x,dy=p.y-m.y,dist=Math.hypot(dx,dy);
  if(dist>.001){m.dir=facing(dx,dy,m.dir);const step=Math.min(dist,dt*4.3);m.x+=dx/dist*step;m.y+=dy/dist*step;m.stride+=step*2.8}
- const seated=p.pose?.type==='sit',frame=!seated&&dist>.045?1+Math.floor(m.stride)%3:0;
+ const lying=p.pose?.type==='lie',seated=p.pose?.type==='sit',frame=!(seated||lying)&&dist>.045?1+Math.floor(m.stride)%3:0;
  // Seats fix facing and pose independently of the direction the guest approached.
- if(seated){
+ if(seated||lying){
    const seat=typeof furniture!=='undefined'?furniture.find(f=>Number(f.id)===Number(p.pose.seatId)):null;
    const rotation=((Number(seat?.rotation)||0)%4+4)%4;
    m.dir=['front','right','back','left'][rotation];
  }
- const pos=tile(m.x,m.y),x=pos.x,y=pos.y;
+ const pos=tile(m.x,m.y),seatShift=(seated||lying)?(p.pose.slot===1?12:p.pose.slot===0&&['sofa','club_sofa','christmas_sofa'].includes(p.pose.kind)?-12:0):0,x=pos.x+seatShift,y=pos.y;
  ctx.save();ctx.fillStyle='#10182a55';ctx.beginPath();ctx.ellipse(x,y+3,16,5,0,0,Math.PI*2);ctx.fill();
  const im=sprite(p.user.avatar||{},m.dir,frame);
  const emote=p.emote?.until>Date.now()?p.emote.name:null;
  const bounce=emote==='cheer'?Math.abs(Math.sin(now/110))*7:emote==='dance'?Math.abs(Math.sin(now/145))*5:0;
  const sway=emote==='dance'?Math.sin(now/170)*.12:emote==='laugh'?Math.sin(now/95)*.04:0;
  ctx.translate(x,y-bounce);ctx.rotate(sway);
- if(seated){
+ if(lying){
+   // Resting pose: avatar rotated onto the bed with two guests offset on the mattress.
+   ctx.translate(p.pose.slot===1?13:-13,-28);ctx.rotate(-Math.PI/2);
+   if(im.complete&&im.naturalWidth)ctx.drawImage(im,-30,-48,60,84);
+ }else if(seated){
    // Draw bent legs at the seat cushion, then the upper body without standing legs.
    const pants=valid(p.user.avatar?.pantsColor,'#425674'),shoes=valid(p.user.avatar?.shoeColor,'#1c2535');
    ctx.fillStyle=pants;
