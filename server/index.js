@@ -212,7 +212,7 @@ const transferLive=async t=>{
   await client.query('COMMIT');
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 };
-const occupants=new Map();const positions=new Map();const poses=new Map();
+const roomKickTimeouts=new Map();const occupants=new Map();const positions=new Map();const poses=new Map();
 const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:displayUser(s.data.user),x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null,held:s.data.held||null}:null}).filter(Boolean);
 const leave=s=>{s.data.held=null;const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
 io.use(async(socket,next)=>{try{const p=jwt.verify(socket.handshake.auth.token,secret);const u=await getUser(p.id);if(!u)return next(new Error('Unauthorized'));const b=await pool.query('SELECT 1 FROM bans WHERE user_id=$1 AND (expires_at IS NULL OR expires_at>now())',[u.id]);if(b.rowCount)return next(new Error('Suspended'));socket.data.user=u;next();}catch{next(new Error('Unauthorized'));}});
@@ -253,7 +253,21 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  });
  s.on('liveTrade:cancel',()=>endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled'));
  s.on('disconnect',()=>endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Other player disconnected'));
- s.on('room:join',async(id,ack=()=>{})=>{try{if(tradeBySocket.has(s.id))endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled: player changed rooms');id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
+ s.on('room:kick',async(targetSocketId,ack=()=>{})=>{
+  const roomId=s.data.roomId,target=io.sockets.sockets.get(String(targetSocketId));
+  if(!roomId||!target||target.data.roomId!==roomId)return ack({error:'Player is not in this room'});
+  try{
+   const owner=(await pool.query('SELECT owner_id FROM rooms WHERE id=$1',[roomId])).rows[0]?.owner_id;
+   if(owner!==s.data.user.id)return ack({error:'Only the room owner can kick guests'});
+   if(target.data.user.id===owner)return ack({error:'Cannot kick the room owner'});
+   const key=roomId+':'+target.data.user.id;
+   roomKickTimeouts.set(key,Date.now()+10*60*1000);
+   if(tradeBySocket.has(target.id))endTrade(liveTrades.get(tradeBySocket.get(target.id)),'Trade cancelled: guest was removed');
+   leave(target);target.emit('room:kicked',{reason:'The room owner removed you. You cannot rejoin for 10 minutes.'});
+   ack({ok:true}); 
+  }catch(e){console.error(e);ack({error:'Could not remove guest'})}
+ });
+ s.on('room:join',async(id,ack=()=>{})=>{try{if(tradeBySocket.has(s.id))endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled: player changed rooms');id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room unavailable'});const kickKey=id+':'+s.data.user.id;const blockedUntil=roomKickTimeouts.get(kickKey)||0;if(blockedUntil>Date.now()&&r.rows[0].owner_id!==s.data.user.id)return ack({error:'The room owner removed you. Try again in '+Math.ceil((blockedUntil-Date.now())/60000)+' minutes.'});if(blockedUntil&&blockedUntil<=Date.now())roomKickTimeouts.delete(kickKey);leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
  // Server-authoritative tile walking: one adjacent tile every 240 ms.
  // A new click cancels the previous route; players cannot teleport by sending coordinates.
  let walkTimer=null;
