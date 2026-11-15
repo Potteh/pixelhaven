@@ -184,3 +184,22 @@ body.hotelViewActive{overflow:hidden}
 #communityBody .tradeLine{display:grid;grid-template-columns:1fr 75px auto;gap:5px;align-items:center}
 #communityBody .communityStatus{background:#c4e2ef;padding:9px;border-left:3px solid #347ea2}
 @media(max-width:700px){.canvasWrap .gameDock{top:5px;left:5px;transform:none;max-width:calc(100% - 145px);padding:3px}.gameDock button{min-width:36px;font-size:15px;padding:4px}.gameDock button span{font-size:8px}.communityPanel{top:3vh;max-height:94vh}#communityBody{max-height:72vh;padding:9px}}
+
+/* v6.6 game profiles and live trading */
+.liveGamePanel[hidden]{display:none!important}
+.liveGamePanel{position:fixed;z-index:65;left:50%;top:10vh;transform:translateX(-50%);width:min(680px,95vw);max-height:80vh;overflow:auto;background:#dceef6;border:3px solid #246181;border-radius:12px;box-shadow:0 0 0 100vmax #071525b0,0 25px 65px #000a;color:#1b4058;padding:0 14px 16px}
+.liveGamePanel .liveHeader{display:flex;align-items:center;justify-content:space-between;margin:0 -14px 14px;padding:12px 15px;background:linear-gradient(#6fb4d4,#2f7ca4);color:white;border-bottom:2px solid #1d5475}
+.liveGamePanel .liveHeader button{padding:4px 10px}
+.liveGamePanel p{color:#31576d;font-size:13px;line-height:1.5}
+.liveGamePanel button{background:linear-gradient(#fff,#b8d8e8);border:1px solid #528ca7;color:#244d65;box-shadow:none;margin:5px;padding:9px;font-size:12px}
+.liveGamePanel input,.liveGamePanel select{min-width:0;background:#fff;color:#173a52;border:1px solid #80abc0;border-radius:5px;padding:9px}
+.liveGamePanel .liveRow{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:7px 0}
+.liveGamePanel .liveRow select{flex:1}
+.liveGamePanel .liveRow input{width:75px}
+.liveGamePanel form.liveRow input{width:auto;flex:1}
+.liveGamePanel .liveTradeColumns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.liveTradeColumns section{min-width:0;background:#f8fcff;border:2px solid #a5c9d9;border-radius:8px;padding:10px}
+.liveTradeColumns h3{color:#285b77;font-size:14px}
+.liveTradeColumns p{overflow-wrap:anywhere}
+.liveGamePanel .liveStatus{padding:10px;background:#b9e1ed;border-left:4px solid #2c829d}
+@media(max-width:620px){.liveGamePanel{top:4vh;max-height:91vh}.liveGamePanel .liveTradeColumns{grid-template-columns:1fr}}
