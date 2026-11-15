@@ -31,7 +31,7 @@ function render(){
  const list=make('div','hotelRoomCards');content.append(list);
  function drawCards(){
   list.replaceChildren();
-  const own=rooms.filter(r=>r.owner_id&&r.owner===username());
+  const own=rooms.filter(r=>Number(r.owner_id)===Number(window.pixelHotelUserId));
   const candidates=tab==='mine'?own:rooms.filter(r=>r.is_public);
   const visible=candidates.filter(r=>(r.name+' '+(r.description||'')+' '+(r.owner||'')).toLowerCase().includes(query.toLowerCase()));
   if(!visible.length){list.append(make('p','hotelEmpty',tab==='mine'?'No rooms yet. Use Room-O-Matic to create one.':'No rooms match your search.'));return}
