@@ -108,6 +108,23 @@ function art(kind){
   a+=ellipse(57,32,4,3,'#f7f7f7');
   a+=path('M39 100 H48 V110 H39 Z','#41536b')+path('M87 100 H96 V110 H87 Z','#41536b');
   break;
+ case 'vending_machine':
+  a+=path('M28 19 L92 19 L102 30 L102 109 L30 109 Z','#d95576','#74384f',3);
+  a+=path('M36 29 H83 V79 H36 Z','#293e65','#a2d3e7',3);
+  for(const [x,c] of [[46,'#f4b654'],[60,'#76cbe8'],[74,'#9ce0a2']]){a+=path('M'+(x-5)+' 40 H'+(x+5)+' V64 H'+(x-5)+' Z',c,'#34495e',1);a+=ellipse(x,38,5,3,'#ffffff')}
+  a+=path('M39 88 H79 V101 H39 Z','#253e56')+path('M84 40 H95 V68 H84 Z','#f5e5b8');
+  break;
+ case 'teleporter':
+  a+=ellipse(64,99,42,13,'#2a4567')+ellipse(64,96,34,9,'#80e5f4');
+  a+=path('M27 92 Q16 48 48 21 Q64 7 80 21 Q112 48 101 92','none','#5065aa',11);
+  a+=path('M31 88 Q22 48 51 25 Q64 15 77 25 Q104 48 97 88','none','#98f4ff',5);
+  a+=ellipse(64,72,23,15,'#5e92c5')+ellipse(64,70,17,10,'#d1f8ff');
+  break;
+ case 'door':
+  a+=path('M32 108 V24 Q32 14 46 14 H84 Q96 14 96 26 V108 Z','#68485e','#352e49',3);
+  a+=path('M41 100 V30 Q41 24 49 24 H79 Q87 24 87 32 V100 Z','#b58c67','#5e4a4d',2);
+  a+=path('M48 34 H80 V65 H48 Z','#7bbcc9','#4d7285',2);
+  a+=ellipse(78,79,4,4,'#f7d87e');break;
  case 'smoke_machine':
   a+=path('M30 73 L96 73 L103 105 L25 105 Z','#4e5368','#292b3d',3);
   a+=path('M36 77 H90 V91 H36 Z','#858ea2');
