@@ -45,6 +45,14 @@ app.patch('/api/avatar',auth,async(req,res)=>{
   res.json(user);
  }catch(e){fail(res,e)}
 });
+const staffRoles=['moderator','admin','owner'];
+const isStaff=u=>staffRoles.includes(u.role);
+const isAdmin=u=>['admin','owner'].includes(u.role);
+const staffGuard=(req,res,next)=>isStaff(req.user)?next():res.status(403).json({error:'Staff only'});
+const adminGuard=(req,res,next)=>isAdmin(req.user)?next():res.status(403).json({error:'Admin only'});
+const ownerGuard=(req,res,next)=>req.user.role==='owner'?next():res.status(403).json({error:'Owner only'});
+const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
+
 app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id ORDER BY r.id LIMIT 100',[req.user.id])).rows);}catch(e){fail(res,e);}});
 const roomStyle=(body={})=>{
  const validColor=(v,fallback)=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:fallback;
@@ -221,13 +229,6 @@ app.post('/api/redeem',auth,async(req,res)=>{
 });
 app.post('/api/mod/ban',auth,async(req,res)=>{try{if(req.user.role!=='admin')return res.sendStatus(403);const id=Number(req.body.userId);if(!Number.isInteger(id)||id===req.user.id)return res.status(400).json({error:'Invalid target'});await pool.query('INSERT INTO bans(user_id,reason) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET reason=$2,expires_at=NULL',[id,safe(req.body.reason,240)]);for(const s of io.sockets.sockets.values())if(s.data.user?.id===id)s.disconnect(true);res.json({ok:true});}catch(e){fail(res,e);}});
 
-const staffRoles=['moderator','admin','owner'];
-const isStaff=u=>staffRoles.includes(u.role);
-const isAdmin=u=>['admin','owner'].includes(u.role);
-const staffGuard=(req,res,next)=>isStaff(req.user)?next():res.status(403).json({error:'Staff only'});
-const adminGuard=(req,res,next)=>isAdmin(req.user)?next():res.status(403).json({error:'Admin only'});
-const ownerGuard=(req,res,next)=>req.user.role==='owner'?next():res.status(403).json({error:'Owner only'});
-const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
 const tradeKinds=Object.keys(CATALOG);
 const tradeItems=raw=>{
  if(!Array.isArray(raw)||raw.length>12)return null;
