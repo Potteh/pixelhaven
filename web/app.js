@@ -143,10 +143,33 @@ function drawFurnitureEffect(f){
  if(effect.kind==='smoke'){
   for(let i=0;i<7;i++){const lift=(phase*8+i*17)%115;ctx.globalAlpha=.28*(1-lift/140);ctx.fillStyle=i%2?'#d5e4f2':'#9ac5e0';ctx.beginPath();ctx.arc(p.x+Math.sin(phase+i)*20,p.y-40-lift,11+i%3*4,0,Math.PI*2);ctx.fill()}
  }else if(effect.kind==='teleport'){ctx.strokeStyle='#78eaff';ctx.lineWidth=4;ctx.globalAlpha=.55+.35*Math.sin(phase);ctx.beginPath();ctx.ellipse(p.x,p.y-42,34,57,0,0,Math.PI*2);ctx.stroke()}
- else if(effect.kind==='door'){ctx.fillStyle='#a9effb55';ctx.fillRect(p.x-26,p.y-102,52,90)}
+ else if(effect.kind==='dispense'){
+  const progress=1-(effect.until-now)/2400;
+  ctx.globalAlpha=Math.max(0,1-progress);
+  ctx.fillStyle='#fdf1da';ctx.strokeStyle='#bc8b6b';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(p.x-8,p.y-95-progress*30);ctx.lineTo(p.x+8,p.y-95-progress*30);ctx.lineTo(p.x,p.y-74-progress*30);ctx.closePath();ctx.fill();ctx.stroke();
+  const color=effect.flavor==='icecream_strawberry'?'#f4a2bd':effect.flavor==='icecream_chocolate'?'#98634c':'#fff1c3';
+  ctx.fillStyle=color;ctx.beginPath();ctx.arc(p.x,p.y-100-progress*30,11,Math.PI,0);ctx.arc(p.x,p.y-100-progress*30,9,0,Math.PI);ctx.fill();
+  for(let i=0;i<5;i++){ctx.fillStyle=i%2?'#fff9d0':'#b7e6fa';ctx.beginPath();ctx.arc(p.x+Math.sin(i*4+phase)*24,p.y-80-progress*45-i*7,2.5,0,Math.PI*2);ctx.fill()}
+ }else if(effect.kind==='door'){ctx.fillStyle='#a9effb55';ctx.fillRect(p.x-26,p.y-102,52,90)}
  ctx.restore();
 }
-function render(){ctx.clearRect(0,0,1000,660);drawRoom();const isLobby=room&&Number(room.id)===1;if(isLobby)lobbyDecor();const decorations=isLobby&&window.pixelLobbyObjects?window.pixelLobbyObjects:[];const entities=[...decorations.map(f=>({...f,type:'decor'})),...furniture.map(f=>({...f,type:'f'})),...players.values().map(p=>({...p,type:'player'}))].sort((a,b)=>((a.x+a.y)-(b.x+b.y))||((a.type==='player'?1:0)-(b.type==='player'?1:0)));for(const e of entities){if(e.type==='player'){drawAvatar(e);drawHeldFood(e)}else{window.pixelRoomFloorShadow?.(e);if(e.type==='decor')window.drawPixelLobbyObject(e);else{drawFurniture(e);drawFurnitureEffect(e)}}}if(window.drawRoomChatBubbles)window.drawRoomChatBubbles();requestAnimationFrame(render)}requestAnimationFrame(render);
+function drawAmbientFurniture(f){
+ const kind=f.kind,now=Date.now(),p=tile(f.x,f.y),t=now/1000;
+ if(!['royal_throne','autumn_throne','golden_fountain','moon_lamp','christmas_tree','candy_cane_lamp','neon_arcade','smoke_machine'].includes(kind))return;
+ ctx.save();
+ if(kind==='smoke_machine'){
+  for(let i=0;i<3;i++){const lift=(t*15+i*31)%82;ctx.globalAlpha=.10*(1-lift/95);ctx.fillStyle='#d5e5ee';ctx.beginPath();ctx.arc(p.x+Math.sin(t+i*3)*12,p.y-40-lift,9+i*3,0,Math.PI*2);ctx.fill()}
+ }else{
+  const color=kind==='moon_lamp'?'#d8e8ff':kind==='christmas_tree'?'#ffe6aa':kind==='neon_arcade'?'#ff7bd8':'#ffe0a0';
+  ctx.fillStyle=color;
+  for(let i=0;i<4;i++){const angle=t*.9+i*Math.PI/2,glow=.45+.35*Math.sin(t*2+i);
+   ctx.globalAlpha=glow;ctx.beginPath();ctx.arc(p.x+Math.cos(angle)* (kind==='christmas_tree'?23:18),p.y-55+Math.sin(angle)*19,1.6+glow*1.7,0,Math.PI*2);ctx.fill()}
+  ctx.globalAlpha=.09+.05*Math.sin(t*2);ctx.beginPath();ctx.ellipse(p.x,p.y-45,kind==='golden_fountain'?46:30,kind==='christmas_tree'?55:38,0,0,Math.PI*2);ctx.fill();
+ }
+ ctx.restore();
+}
+function render(){ctx.clearRect(0,0,1000,660);drawRoom();const isLobby=room&&Number(room.id)===1;if(isLobby)lobbyDecor();const decorations=isLobby&&window.pixelLobbyObjects?window.pixelLobbyObjects:[];const entities=[...decorations.map(f=>({...f,type:'decor'})),...furniture.map(f=>({...f,type:'f'})),...players.values().map(p=>({...p,type:'player'}))].sort((a,b)=>((a.x+a.y)-(b.x+b.y))||((a.type==='player'?1:0)-(b.type==='player'?1:0)));for(const e of entities){if(e.type==='player'){drawAvatar(e);drawHeldFood(e)}else{window.pixelRoomFloorShadow?.(e);if(e.type==='decor')window.drawPixelLobbyObject(e);else{drawFurniture(e);drawAmbientFurniture(e);drawFurnitureEffect(e)}}}if(window.drawRoomChatBubbles)window.drawRoomChatBubbles();requestAnimationFrame(render)}requestAnimationFrame(render);
 let furnitureMoveMode=false;
 function clickTile(e){
  if(!room)return;
