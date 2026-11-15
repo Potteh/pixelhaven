@@ -92,7 +92,14 @@ window.drawFurniture=function(f){
  const p=tile(f.x,f.y),im=get(f.kind);
  if(!im.complete||!im.naturalWidth)return;
  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
- ctx.drawImage(im,Math.round(p.x-64),Math.round(p.y-112),128,128);
+ const rotation=((Number(f.rotation)||0)%4+4)%4;
+ // Keep furniture upright: change facing via horizontal mirroring and perspective,
+ // never rotate the entire image (which would turn beds and chairs upside down).
+ ctx.translate(Math.round(p.x),Math.round(p.y));
+ if(rotation===1){ctx.transform(.84,0,-.16,1,0,0)}
+ else if(rotation===2){ctx.scale(-1,1)}
+ else if(rotation===3){ctx.transform(-.84,0,.16,1,0,0)}
+ ctx.drawImage(im,-64,-112,128,128);
  ctx.restore();
 };
 console.info('[Pixel Haven] v5.5 illustrated furniture atlas loaded');
