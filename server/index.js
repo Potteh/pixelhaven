@@ -20,7 +20,7 @@ app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'12kb
 app.use('/api',rateLimit({windowMs:15*60*1000,limit:120,standardHeaders:'draft-7',legacyHeaders:false}));
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 app.use(express.static(root));
-const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,fridge:180,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25};
+const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,fridge:180,vending_machine:210,teleporter:350,door:125,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25};
 const safe=(s,max=240)=>String(s??'').trim().slice(0,max);
 const token=u=>jwt.sign({id:u.id},secret,{expiresIn:'7d'});
 const getUser=async id=>{const u=(await pool.query('SELECT id,username,coins,role,avatar,active_profile_id FROM users WHERE id=$1',[id])).rows[0];if(!u)return u;const p=u.active_profile_id?(await pool.query('SELECT id,name,avatar FROM game_profiles WHERE id=$1 AND user_id=$2',[u.active_profile_id,id])).rows[0]:null;u.profile=p||null;if(p?.avatar&&Object.keys(p.avatar).length)u.avatar=p.avatar;return u};
@@ -326,6 +326,61 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  s.on('player:dropHeld',(_,ack=()=>{})=>{
   if(!s.data.roomId)return ack({error:'Join a room first'});
   s.data.held=null;io.to('room:'+s.data.roomId).emit('player:held',{socketId:s.id,held:null});ack({ok:true});
+ });
+ // Move placed furniture without returning it to inventory. Room owner only.
+ s.on('furniture:move',async({itemId,x,y}={},ack=()=>{})=>{
+  const roomId=s.data.roomId;itemId=Number(itemId);x=Number(x);y=Number(y);
+  if(!roomId||!Number.isSafeInteger(itemId)||itemId<1||![x,y].every(v=>Number.isInteger(v)&&v>=0&&v<=9))return ack({error:'Invalid furniture position'});
+  const client=await pool.connect();
+  try{
+   await client.query('BEGIN');
+   const room=await client.query('SELECT owner_id FROM rooms WHERE id=$1 FOR UPDATE',[roomId]);
+   if(room.rows[0]?.owner_id!==s.data.user.id)throw Error('Only the room owner can move furniture');
+   const item=await client.query('SELECT id FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3 FOR UPDATE',[itemId,roomId,s.data.user.id]);
+   if(!item.rowCount)throw Error('Furniture not found');
+   const occupied=await client.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3 AND id<>$4',[roomId,x,y,itemId]);
+   if(occupied.rowCount)throw Error('That tile is occupied');
+   const result=await client.query('UPDATE furniture SET x=$1,y=$2 WHERE id=$3 RETURNING id,x,y',[x,y,itemId]);
+   await client.query('COMMIT');
+   for(const [sid,pose] of poses)if(pose?.seatId===itemId){poses.delete(sid);io.to('room:'+roomId).emit('player:pose',{socketId:sid,pose:null})}
+   io.to('room:'+roomId).emit('furniture:moved',result.rows[0]);ack({ok:true});
+  }catch(e){await client.query('ROLLBACK');ack({error:e.message})}finally{client.release()}
+ });
+ // Interactions are validated against actual room furniture and player distance.
+ s.on('furniture:interact',async(itemId,ack=()=>{})=>{
+  const roomId=s.data.roomId,id=Number(itemId),now=Date.now();
+  if(!roomId||!Number.isSafeInteger(id)||id<1)return ack({error:'Invalid furniture'});
+  if(now-(s.data.lastInteract||0)<1200)return ack({error:'Please wait a moment'});
+  try{
+   const item=(await pool.query('SELECT id,kind,x,y FROM furniture WHERE id=$1 AND room_id=$2',[id,roomId])).rows[0];
+   if(!item)return ack({error:'Furniture not found'});
+   const pos=positions.get(s.id);
+   if(!pos||Math.abs(pos.x-item.x)+Math.abs(pos.y-item.y)>3)return ack({error:'Move closer to interact'});
+   const kind=item.kind;
+   if(kind==='vending_machine'){
+    const options=['soda','juice','water'],held=options[Math.floor(Math.random()*options.length)];
+    s.data.held=held;s.data.lastInteract=now;
+    io.to('room:'+roomId).emit('player:held',{socketId:s.id,held});return ack({ok:true,kind,held});
+   }
+   if(kind==='smoke_machine'){
+    s.data.lastInteract=now;io.to('room:'+roomId).emit('furniture:effect',{id,kind:'smoke',until:now+6000});return ack({ok:true,kind});
+   }
+   if(kind==='door'){
+    s.data.lastInteract=now;io.to('room:'+roomId).emit('furniture:effect',{id,kind:'door',until:now+4000});return ack({ok:true,kind});
+   }
+   if(kind==='teleporter'){
+    const other=(await pool.query("SELECT id,x,y FROM furniture WHERE room_id=$1 AND kind='teleporter' AND id<>$2 ORDER BY id LIMIT 1",[roomId,id])).rows[0];
+    if(!other)return ack({error:'Place a second teleporter in this room to link them'});
+    s.data.lastInteract=now;stopWalking();poses.delete(s.id);
+    positions.set(s.id,{x:other.x,y:other.y});
+    io.to('room:'+roomId).emit('player:pose',{socketId:s.id,pose:null});
+    io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:other.x,y:other.y});
+    io.to('room:'+roomId).emit('furniture:effect',{id,kind:'teleport',until:now+1200});
+    io.to('room:'+roomId).emit('furniture:effect',{id:other.id,kind:'teleport',until:now+1200});
+    return ack({ok:true,kind});
+   }
+   ack({error:'This item has no special interaction'});
+  }catch(e){console.error(e);ack({error:'Interaction failed'})}
  });
  s.on('furniture:rotate',async(itemId,ack=()=>{})=>{try{
    const roomId=s.data.roomId,id=Number(itemId);
