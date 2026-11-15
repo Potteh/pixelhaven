@@ -714,7 +714,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    if(['lamp','moon_lamp','candy_cane_lamp','christmas_fireplace'].includes(kind)){
     s.data.lastInteract=now;
     const stateKey=roomId+':'+id;
-    const enabled=!furnitureLightStates.get(stateKey);
+    const enabled=furnitureLightStates.get(stateKey)===false;
     furnitureLightStates.set(stateKey,enabled);
     io.to('room:'+roomId).emit('furniture:light',{id,enabled});
     return ack({ok:true,kind,enabled});
