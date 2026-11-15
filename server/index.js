@@ -63,7 +63,7 @@ app.patch('/api/rooms/:id',auth,async(req,res)=>{
   const isPublic=req.body.is_public===undefined?current.is_public:req.body.is_public===true;
   const updated=(await pool.query('UPDATE rooms SET name=$1,description=$2,is_public=$3,wall_color=$4,floor_color=$5,floor_pattern=$6,layout=$7 WHERE id=$8 AND owner_id=$9 RETURNING *',[name,description,isPublic,style.wall_color,style.floor_color,style.floor_pattern,style.layout,id,req.user.id])).rows[0];
   io.to('room:'+id).emit('room:updated',updated);
-  if(!isPublic)await pool.query("DELETE FROM room_entry_requests WHERE room_id=$1 AND status='approved'",[id]);if(!isPublic)for(const sid of [...(occupants.get(id)||[])]){const guest=io.sockets.sockets.get(sid);if(guest&&guest.data.user.id!==req.user.id){leave(guest);guest.emit('room:kicked',{reason:'Room is now locked'});}}
+  if(current.is_public&&!isPublic)await pool.query("DELETE FROM room_entry_requests WHERE room_id=$1 AND status='approved'",[id]);if(current.is_public&&!isPublic)for(const sid of [...(occupants.get(id)||[])]){const guest=io.sockets.sockets.get(sid);if(guest&&guest.data.user.id!==req.user.id){leave(guest);guest.emit('room:kicked',{reason:'Room is now locked'});}}
   res.json(updated);
  }catch(e){fail(res,e)}
 });
