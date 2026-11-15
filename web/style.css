@@ -254,3 +254,17 @@ main{grid-template-columns:minmax(0,1fr) 300px;max-width:1800px}
 #roomSettingsOpen[hidden]{display:none!important}
 .guest{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .guest button{border:1px solid #9c4a50;background:#f4d2d4;color:#7c2933;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer}
+
+/* Locked room requests and staff chat history */
+.roomRequestList{display:grid;gap:8px}
+.roomRequestRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px;border:1px solid #9fc5d5;border-radius:8px;background:#f4fbff}
+.roomRequestRow strong{flex:1;min-width:100px}
+.roomRequestRow button{background:#b6e0f1;color:#214c64;border:1px solid #77a7bf;border-radius:6px;padding:6px 10px;cursor:pointer}
+.staffChatLogs{border-top:2px solid #8bb7ca;margin-top:18px;padding-top:12px}
+.chatLogFilters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px}
+.chatLogFilters input{min-width:90px;max-width:180px;flex:1;padding:7px}
+.chatLogFilters button{padding:7px}
+.chatLogResults{max-height:380px;overflow-y:auto;display:grid;gap:7px}
+.chatLogEntry{overflow-wrap:anywhere}
+.chatLogEntry small{display:block;opacity:.7;margin-top:3px}
+.chatLogEntry p{white-space:pre-wrap;margin:6px 0 0}
