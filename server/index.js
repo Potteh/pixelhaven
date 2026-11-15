@@ -343,7 +343,7 @@ const CATALOG_META={
 };
 app.get('/api/catalog/details',auth,async(_req,res)=>{
  try{const stock=(await pool.query('SELECT kind,remaining,initial_stock FROM catalog_limited_stock')).rows;const byKind=Object.fromEntries(stock.map(x=>[x.kind,x]));
-  res.json(Object.entries(CATALOG).map(([kind,price])=>({kind,price,name:CATALOG_META[kind]?.name||kind.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()),collection:CATALOG_META[kind]?.collection||'Classic Collection',rarity:CATALOG_META[kind]?.rarity||'common',description:CATALOG_META[kind]?.description||'Classic hotel furniture',limited:!!CATALOG_META[kind]?.limited,remaining:byKind[kind]?.remaining??null,initial_stock:byKind[kind]?.initial_stock??null}))));
+  res.json(Object.entries(CATALOG).map(([kind,price])=>({kind,price,name:CATALOG_META[kind]?.name||kind.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()),collection:CATALOG_META[kind]?.collection||'Classic Collection',rarity:CATALOG_META[kind]?.rarity||'common',description:CATALOG_META[kind]?.description||'Classic hotel furniture',limited:!!CATALOG_META[kind]?.limited,remaining:byKind[kind]?.remaining??null,initial_stock:byKind[kind]?.initial_stock??null})));
  }catch(e){fail(res,e)}
 });
 
