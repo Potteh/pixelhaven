@@ -58,3 +58,6 @@ CREATE TABLE IF NOT EXISTS social_message_reports (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  UNIQUE(reporter_id,message_id)
 );
+
+-- Social 2.1 read receipts per account and friend conversation.
+CREATE TABLE IF NOT EXISTS social_reads (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, last_read_id BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(user_id,friend_id));
