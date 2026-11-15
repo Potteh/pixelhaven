@@ -139,8 +139,8 @@ window.drawAvatar=function(p){
  ctx.fillStyle='#10192de8';ctx.fillRect(x-width/2,y-125,width,21);
  ctx.fillStyle='#fff';ctx.fillText(name,x,y-110);
 };
-window.pixelAvatarPreview=(g,a)=>{
- const im=sprite(a||{},'front',0);
+window.pixelAvatarPreview=(g,a,dir='front')=>{
+ const im=sprite(a||{},dir,0);
  g.clearRect(0,0,120,152);
  if(im.complete&&im.naturalWidth)g.drawImage(im,4,0,112,147);
  else im.addEventListener('load',()=>{g.clearRect(0,0,120,152);g.drawImage(im,4,0,112,147)},{once:true});
