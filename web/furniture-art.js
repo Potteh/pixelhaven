@@ -97,6 +97,17 @@ function art(kind){
    a+=path('M'+(x-5)+' 60 L'+x+' 74 L'+(x+5)+' 60 Z','#c9975e');
   }
   a+=path('M42 88 H86 V100 H42 Z','#bd719a')+line('M46 94 H82','#ffe2f3',2);break;
+ case 'fridge':
+  a+=path('M32 21 L88 21 L101 31 L101 108 L40 108 L32 97 Z','#b9d9e3','#54788b',3);
+  a+=path('M32 21 L88 21 L88 98 L32 98 Z','#d8f2f5','#7195a7',3);
+  a+=path('M88 21 L101 31 L101 108 L88 98 Z','#668da1','#4d6c83',2);
+  a+=path('M32 58 H88 V62 H32 Z','#668da1');
+  a+=path('M75 37 H80 V52 H75 Z','#edfaff','#67869a',1);
+  a+=path('M75 72 H80 V90 H75 Z','#edfaff','#67869a',1);
+  a+=path('M44 29 H67 V35 H44 Z','#9ed8e5');
+  a+=ellipse(57,32,4,3,'#f7f7f7');
+  a+=path('M39 100 H48 V110 H39 Z','#41536b')+path('M87 100 H96 V110 H87 Z','#41536b');
+  break;
  case 'smoke_machine':
   a+=path('M30 73 L96 73 L103 105 L25 105 Z','#4e5368','#292b3d',3);
   a+=path('M36 77 H90 V91 H36 Z','#858ea2');
