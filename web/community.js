@@ -132,6 +132,19 @@ async function staffChatLogs(){
  }
  await load(false);
 }
+async function staffBadges(){
+ const section=el('section');section.append(el('h3','🏅 Player Badges'));
+ const p=playerSearch('Select player to award a badge');
+ const codes=el('select'),list=el('div');list.className='communityActions';
+ section.append(p.wrap,field('Badge code',codes),list);
+ try{const badges=await api('/badges');for(const b of badges){const o=el('option',b.code+' — '+b.name);o.value=b.code;codes.append(o)}}catch(e){section.append(el('p',e.message))}
+ async function act(action){
+  try{if(!p.select.value)throw Error('Select a player first');await api('/mod/badges/'+action,'POST',{userId:Number(p.select.value),code:codes.value});section.append(el('p',action==='grant'?'Badge granted':'Badge revoked'))}
+  catch(e){section.append(el('p',e.message))}
+ }
+ list.append(button('Award Badge',()=>act('grant')),button('Revoke Badge',()=>act('revoke')));
+ body.append(section);
+}
 async function staffMessageReports(){
  const section=el('section');section.append(el('h3','✉️ Reported Private Messages'));
  const list=el('div');section.append(list);
@@ -139,7 +152,7 @@ async function staffMessageReports(){
  section.append(button('Refresh message reports',refresh));body.append(section);await refresh();
 }
 async function staff(){if(!['owner','admin','moderator'].includes(user.role)){status('Staff access required');return}const reportList=el('div');body.append(el('h3','📋 Issue Browser'),button('Refresh reports',refresh),reportList);
-async function refresh(){try{const reports=await api('/mod/reports');reportList.replaceChildren();for(const r of reports){const row=el('article');row.className='communityCase';row.append(el('strong','#'+r.id+' · '+r.category+' · '+r.status),el('p','Reporter: '+r.reporter+' | Player: '+r.target),el('p',r.details));for(const action of ['picked','resolved','dismissed'])row.append(button(action,async()=>{try{await api('/mod/reports/'+r.id,'PATCH',{status:action});await refresh()}catch(e){status(e.message)}}));reportList.append(row)}}catch(e){status(e.message)}}await refresh();await staffChatLogs();await staffMessageReports();
+async function refresh(){try{const reports=await api('/mod/reports');reportList.replaceChildren();for(const r of reports){const row=el('article');row.className='communityCase';row.append(el('strong','#'+r.id+' · '+r.category+' · '+r.status),el('p','Reporter: '+r.reporter+' | Player: '+r.target),el('p',r.details));for(const action of ['picked','resolved','dismissed'])row.append(button(action,async()=>{try{await api('/mod/reports/'+r.id,'PATCH',{status:action});await refresh()}catch(e){status(e.message)}}));reportList.append(row)}}catch(e){status(e.message)}}await refresh();await staffChatLogs();await staffMessageReports();if(['admin','owner'].includes(user.role))await staffBadges();
 const p=playerSearch('Find player');const reason=input('text','Reason for action');const amount=input('number','Credits adjustment');const role=el('select');for(const r of ['player','moderator','admin']){const o=el('option',r);o.value=r;role.append(o)}
 body.append(el('h3','👤 Player Management'),p.wrap,field('Reason',reason));if(user.role==='owner'){const self=button('Select my account',()=>{let option=[...p.select.options].find(o=>o.value===String(user.id));if(!option){option=el('option',user.username+' · owner (you)');option.value=String(user.id);p.select.append(option)}p.select.value=String(user.id)});body.append(self)}
 const actions=el('div');actions.className='communityActions';body.append(actions);
@@ -164,6 +177,9 @@ window.pixelShowPlayer=async player=>{
   await open('social');
   const p=el('article');p.className='socialProfile communityCase';
   p.append(el('h3','👤 '+player.username),el('p','Player profile · '+(player.role||'guest')));
+  const badgeBox=el('div');badgeBox.className='playerBadges';p.append(badgeBox);
+  try{const badges=await api('/users/'+player.id+'/badges');if(!badges.length)badgeBox.append(el('small','No badges yet'));for(const b of badges){const item=el('div');item.className='playerBadge';const img=el('img');img.src=b.image_path;img.alt=b.name;img.title=b.name+' ('+b.code+')';img.onerror=()=>{img.hidden=true;item.append(el('strong',b.code))};item.append(img,el('small',b.name));badgeBox.append(item)}}catch(e){badgeBox.append(el('small',e.message))}
+
   const controls=el('div');controls.className='communityActions';p.append(controls);
   controls.append(button('Find & Add Friend',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'request'});p.append(el('p','Friend request sent'))}catch(e){p.append(el('p',e.message))}}));
   controls.append(button('Message / Friends',()=>select('social')));
