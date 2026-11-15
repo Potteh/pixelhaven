@@ -74,6 +74,80 @@ function art(kind){
   a+=ellipse(56,82,4,4,'#ec6484')+ellipse(73,84,4,4,'#67e5d4');
   a+=path('M35 90 L94 90 L91 108 L38 108 Z','#454078');
   a+=line('M44 97 L84 97','#8378c5',2);break;
+ case 'club_sofa':
+  a+=path('M22 89 L25 110 L34 110 L35 89 M95 89 L99 110 L108 110 L106 88','#49362d');
+  a+=path('M17 49 Q19 29 39 28 L90 28 Q110 31 111 51 L110 91 Q65 110 18 91 Z','#60453a','#cba45c',3);
+  a+=path('M26 48 Q28 39 41 38 L87 38 Q100 40 102 50 L101 77 Q64 90 26 77 Z','#886a50');
+  a+=path('M25 77 Q64 66 104 77 L103 94 Q64 106 24 94 Z','#b48a58');
+  a+=line('M64 45 L64 76','#d5b779',3)+line('M29 85 Q64 96 99 85','#ffe2a1',2);
+  for(const x of [25,103])a+=ellipse(x,75,7,13,'#d7ad63');break;
+ case 'royal_throne':
+  a+=path('M39 83 L37 112 L48 112 L51 89 M79 83 L81 112 L92 112 L89 86','#775026');
+  a+=path('M35 21 L43 27 L50 14 L64 25 L78 14 L85 27 L94 21 L92 84 L35 84 Z','#d7a43d','#7d4b24',3);
+  a+=path('M44 34 Q64 25 84 34 L83 78 Q64 88 45 78 Z','#8d264c','#f5cf6c',3);
+  a+=path('M33 78 Q64 70 96 78 L93 96 Q64 106 36 96 Z','#ae315c','#e3b85b',3);
+  a+=ellipse(64,46,7,9,'#efcf6b')+ellipse(64,46,3,5,'#d95870');
+  for(const x of [37,64,91])a+=ellipse(x,23,4,4,'#fff0a7');break;
+ case 'ice_cream_machine':
+  a+=path('M31 32 L97 32 L103 106 L25 106 Z','#e3b6c4','#73566e',3);
+  a+=path('M30 30 Q64 9 98 30 L97 43 L30 43 Z','#f8d5e5');
+  a+=path('M37 47 L91 47 L89 83 L39 83 Z','#b2e5ee','#7297ac',2);
+  for(const [x,c] of [[48,'#ffdbb2'],[64,'#f5a3ba'],[80,'#b4e2c5']]){
+   a+=path('M'+(x-6)+' 59 Q'+(x-9)+' 50 '+x+' 48 Q'+(x+9)+' 50 '+(x+6)+' 59 Z',c);
+   a+=path('M'+(x-5)+' 60 L'+x+' 74 L'+(x+5)+' 60 Z','#c9975e');
+  }
+  a+=path('M42 88 H86 V100 H42 Z','#bd719a')+line('M46 94 H82','#ffe2f3',2);break;
+ case 'smoke_machine':
+  a+=path('M30 73 L96 73 L103 105 L25 105 Z','#4e5368','#292b3d',3);
+  a+=path('M36 77 H90 V91 H36 Z','#858ea2');
+  a+=ellipse(64,86,13,6,'#293647');
+  a+=path('M40 71 Q23 55 44 45 Q60 37 49 26 Q45 18 57 13','none','#c4d8e9',5);
+  a+=path('M70 71 Q91 54 74 43 Q60 32 79 18','none','#9ed6e3',6);
+  a+=ellipse(40,101,5,4,'#77e7db')+ellipse(89,101,5,4,'#d37aff');break;
+ case 'christmas_tree':
+  a+=path('M59 89 H69 V111 H59 Z','#765139');
+  for(const [y,w] of [[31,17],[49,26],[69,35],[88,43]])a+=path('M64 '+(y-24)+' L'+(64-w)+' '+y+' Q64 '+(y+7)+' '+(64+w)+' '+y+' Z',y%2?'#26795e':'#236d55','#155541',1.5);
+  a+=path('M64 3 L69 13 L80 14 L72 22 L74 33 L64 27 L54 33 L56 22 L48 14 L59 13 Z','#ffe19a','#b88c2b',1.5);
+  for(const [x,y,c] of [[55,34,'#ffcd62'],[72,43,'#d65366'],[44,64,'#88d8ff'],[81,67,'#ffe17b'],[57,83,'#f46d83'],[75,89,'#fff2bc']])a+=ellipse(x,y,4,4,c);
+  a+=line('M49 51 Q65 60 82 49 M37 74 Q63 87 92 73','#f3d18b',2);break;
+ case 'christmas_sofa':
+  a+=path('M22 87 L27 110 L35 110 L36 90 M96 89 L99 110 L107 110 L105 87','#6d4537');
+  a+=path('M19 51 Q21 31 41 31 H87 Q108 32 109 51 L108 91 Q64 106 20 91 Z','#a83246','#ffe0aa',3);
+  a+=path('M28 48 Q64 38 100 48 L99 77 Q64 87 29 77 Z','#c74654');
+  a+=path('M25 77 Q64 69 103 77 L101 94 Q64 105 26 94 Z','#317c60');
+  a+=line('M64 49 V77','#e6b69a',2);
+  a+=ellipse(44,68,8,7,'#f7e7d0')+ellipse(83,68,8,7,'#f7e7d0');break;
+ case 'christmas_fireplace':
+  a+=path('M22 34 H106 V109 H22 Z','#a65346','#713b37',3);
+  for(let y=43;y<106;y+=15)a+=line('M26 '+y+' H102','#e5a27c',1.8);
+  a+=path('M39 62 H89 V108 H39 Z','#392d38','#f0ca91',3);
+  a+=path('M53 101 Q39 87 58 74 Q57 88 67 70 Q91 88 77 103 Z','#f6a54a');
+  a+=path('M61 101 Q55 91 67 82 Q77 95 70 102 Z','#ffe3a2','none');
+  a+=path('M15 29 H113 V41 H15 Z','#f1d5a3','#9e6e53',2);
+  a+=line('M28 23 Q64 40 101 23','#2f986b',5);
+  for(const x of [38,67,92])a+=ellipse(x,27,4,5,'#dc4453');break;
+ case 'snowman':
+  a+=ellipse(64,87,27,26,'#e7f3fa')+ellipse(64,52,20,20,'#f6fcff');
+  a+=path('M42 38 H86 V44 H42 Z M49 17 H79 V39 H49 Z','#39475c');
+  a+=path('M48 68 Q64 77 80 68 L83 77 Q64 87 45 77 Z','#d34557');
+  a+=ellipse(57,49,2.8,3,'#2e3547')+ellipse(72,49,2.8,3,'#2e3547');
+  a+=path('M64 55 L83 59 L64 61 Z','#f5a044');
+  for(const y of [79,91,103])a+=ellipse(64,y,3,3,'#47566b');break;
+ case 'gift_stack':
+  a+=path('M19 77 L60 77 L60 109 L19 109 Z','#c44456')+path('M60 77 L88 65 L88 96 L60 109 Z','#a52e4a');
+  a+=path('M19 77 L47 64 L88 65 L60 77 Z','#e26775');
+  a+=path('M36 70 L47 66 L47 108 L36 108 Z','#ffe0a4');
+  a+=path('M61 47 H108 V85 H61 Z','#3b8d79')+path('M61 47 L84 35 L118 47 L108 55 Z','#62baa1');
+  a+=path('M80 39 H90 V85 H80 Z','#f5d59b')+line('M61 64 H108','#f5d59b',5);break;
+ case 'candy_cane_lamp':
+  a+=ellipse(65,108,24,7,'#6a9a84');
+  a+=path('M61 105 V35 Q61 16 79 16 Q96 16 96 34 Q96 48 82 48','none','#fff5dc',13);
+  for(const [x,y] of [[61,91],[61,69],[61,47],[67,25],[87,22],[92,43]])a+=line('M'+(x-6)+' '+(y-6)+' L'+(x+6)+' '+(y+6),'#d94854',5);
+  a+=ellipse(82,48,7,6,'#fff1da');break;
+ case 'festive_rug':
+  a+=path('M10 83 L64 52 L119 83 L64 115 Z','#d53f4e','#f2dba3',3);
+  a+=path('M25 83 L64 61 L103 83 L64 106 Z','#26765a','#fff0c3',2);
+  a+=path('M64 69 L69 80 L82 81 L72 90 L75 102 L64 95 L53 102 L56 90 L46 81 L59 80 Z','#f4dc9d','none');break;
  default:
   a+=path('M25 65 L64 42 L104 65 L64 89 Z','url(#wood)')+path('M25 65 L64 89 L64 107 L25 83 Z','#936748')+path('M64 89 L104 65 L104 83 L64 107 Z','#b6845b');
  }
