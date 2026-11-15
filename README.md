@@ -104,7 +104,7 @@ docker compose exec -T db pg_dump -U pixelhaven pixelhaven > pixelhaven-backup.s
 ### Current limitations / roadmap
 
 - This is an installable multiplayer MVP, **not** a feature-complete Habbo clone. Art is procedurally drawn isometric tiles, emoji furniture, and simple avatars; original sprite sheets, animation, and collision/pathfinding are future improvements.
-- Room privacy is enforced at join time, but there are no invitations, friend lists, trading, mini-games, or player reporting yet.
+- Room locking is enforced at join time, but there are no invitations, friend lists, trading, mini-games, or player reporting yet.
 - Chat is rate-limited and persisted; add filtering, reporting, audit tools, and dedicated moderation before opening a public community.
 - Coin balances start at 500. There is no real-money billing or currency earning loop.
 - Run one application replica only: room presence currently lives in process memory. Multi-instance scaling requires a Socket.IO Redis adapter and shared presence.
@@ -112,7 +112,7 @@ docker compose exec -T db pg_dump -U pixelhaven pixelhaven > pixelhaven-backup.s
 
 ### Room-O-Matic 2.0 and owner moderation
 
-Create a room with customizable wall and floor colors, flooring patterns (checker, solid, wood, tiles), and room styles (classic, lounge, studio). The isometric play grid remains 10 × 10; styles alter decoration and flooring rather than the room's physical dimensions. Room owners can use **🎨 Room Settings** above the room canvas to change the room name, description, appearance, and public/private status. Updates persist in PostgreSQL and broadcast to connected guests.
+Create a room with customizable wall and floor colors, flooring patterns (checker, solid, wood, tiles), and room styles (classic, lounge, studio). The isometric play grid remains 10 × 10; styles alter decoration and flooring rather than the room's physical dimensions. Room owners can use **🎨 Room Settings** above the room canvas to change the room name, description, appearance, and open/locked status. Updates persist in PostgreSQL and broadcast to connected guests.
 
-Room owners see **Kick** next to other guests in the room's player list. Kicking removes all selected socket's presence immediately and prevents that account from rejoining the same room for 10 minutes (in-memory cooldown, reset on server restart). Guests receive an explanation and return to the hotel lobby. Room ownership is verified on the server; players cannot kick the room owner. Changing a public room to private removes guests who are not the owner.
+Room owners see **Kick** next to other guests in the room's player list. Kicking removes all selected socket's presence immediately and prevents that account from rejoining the same room for 10 minutes (in-memory cooldown, reset on server restart). Guests receive an explanation and return to the hotel lobby. Room ownership is verified on the server; players cannot kick the room owner. Changing an open room to locked removes guests who are not the owner.
 
