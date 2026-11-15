@@ -53,7 +53,7 @@ const adminGuard=(req,res,next)=>isAdmin(req.user)?next():res.status(403).json({
 const ownerGuard=(req,res,next)=>req.user.role==='owner'?next():res.status(403).json({error:'Owner only'});
 const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
 
-app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id ORDER BY r.id LIMIT 100',[req.user.id])).rows);}catch(e){fail(res,e);}});
+app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id ORDER BY r.id LIMIT 100')).rows);}catch(e){fail(res,e);}});
 const roomStyle=(body={})=>{
  const validColor=(v,fallback)=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:fallback;
  return {wall_color:validColor(body.wall_color,'#827b8f'),floor_color:validColor(body.floor_color,'#b3b8c8'),floor_pattern:['checker','solid','wood','tiles'].includes(body.floor_pattern)?body.floor_pattern:'checker',layout:['classic','lounge','studio'].includes(body.layout)?body.layout:'classic'};
