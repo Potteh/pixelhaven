@@ -32,7 +32,7 @@ function render(){
  function drawCards(){
   list.replaceChildren();
   const own=rooms.filter(r=>Number(r.owner_id)===Number(window.pixelHotelUserId));
-  const candidates=tab==='mine'?own:rooms.filter(r=>r.is_public);
+  const candidates=tab==='mine'?own:rooms;
   const visible=candidates.filter(r=>(r.name+' '+(r.description||'')+' '+(r.owner||'')).toLowerCase().includes(query.toLowerCase()));
   if(!visible.length){list.append(make('p','hotelEmpty',tab==='mine'?'No rooms yet. Use Room-O-Matic to create one.':'No rooms match your search.'));return}
   for(const r of visible){
@@ -42,9 +42,10 @@ function render(){
    const title=make('strong',null,r.name);const description=make('p',null,r.description||'Come in and explore!');
    const meta=make('small',null,(r.owner?'By '+r.owner:'Official Hotel Room')+' · '+(r.is_public?'🌐 Open':'🔒 Locked'));
    details.append(title,description,meta);
-   const enter=make('button','hotelEnter','Enter Room');
-   enter.onclick=()=>{hide();window.join?.(r.id)};
-   card.append(art,details,enter);list.append(card);
+   const locked=!r.is_public&&Number(r.owner_id)!==Number(window.pixelHotelUserId);
+   const enter=make('button','hotelEnter',locked?'🔔 Request Entry':'Enter Room');
+   enter.onclick=async()=>{if(locked){enter.disabled=true;try{const result=await apiRooms('/rooms/'+r.id+'/request-entry','POST');enter.textContent=result.status==='approved'?'✓ Approved — Enter':'⏳ Request Pending';if(result.status==='approved'){enter.disabled=false;enter.onclick=()=>{hide();window.join?.(r.id)}}}catch(e){enter.textContent=e.message}return}hide();window.join?.(r.id)};
+   card.append(art,details,enter);if(Number(r.owner_id)===Number(window.pixelHotelUserId)&&!r.is_public){const requests=make('button','hotelEnter','🔔 Entry Requests');requests.onclick=()=>window.pixelRoomRequests?.(r.id);card.append(requests)}list.append(card);
   }
  }
  drawCards();
@@ -61,6 +62,29 @@ const roomDesignFields=(form,values={})=>{
   const select=make('select');for(const option of choices){const o=make('option',null,option[0].toUpperCase()+option.slice(1));o.value=option;select.append(o)}select.value=values[key]||defaultValue;controls[key]=row(label,select);
  }
  return ()=>Object.fromEntries(Object.entries(controls).map(([k,v])=>[k,v.value]));
+};
+window.pixelRoomRequests=async roomId=>{
+ const backdrop=make('div','roomSettingsBackdrop'),panel=make('div','roomSettingsPanel');
+ panel.append(make('h3',null,'🔔 Locked Room Entry Requests'));
+ const list=make('div','roomRequestList'),close=make('button',null,'Close');close.type='button';close.onclick=()=>backdrop.remove();
+ panel.append(list,close);backdrop.append(panel);document.body.append(backdrop);
+ async function refresh(){
+  list.replaceChildren();
+  try{
+   const requests=await apiRooms('/rooms/'+roomId+'/requests');
+   if(!requests.length){list.append(make('p',null,'No pending entry requests'));return}
+   for(const request of requests){
+    const row=make('div','roomRequestRow');row.append(make('strong',null,request.username));
+    for(const [label,decision] of [['✓ Approve','approved'],['✕ Deny','denied']]){
+     const b=make('button',null,label);b.type='button';
+     b.onclick=async()=>{b.disabled=true;try{await apiRooms('/rooms/'+roomId+'/requests/'+request.id,'POST',{decision});await refresh()}catch(e){b.disabled=false;row.append(make('small',null,e.message))}};
+     row.append(b)
+    }
+    list.append(row)
+   }
+  }catch(e){list.append(make('p',null,e.message))}
+ }
+ await refresh();
 };
 window.pixelRoomSettings=(room,onSaved)=>{
  const backdrop=make('div','roomSettingsBackdrop'),panel=make('form','roomSettingsPanel');
