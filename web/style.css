@@ -203,3 +203,29 @@ body.hotelViewActive{overflow:hidden}
 .liveTradeColumns p{overflow-wrap:anywhere}
 .liveGamePanel .liveStatus{padding:10px;background:#b9e1ed;border-left:4px solid #2c829d}
 @media(max-width:620px){.liveGamePanel{top:4vh;max-height:91vh}.liveGamePanel .liveTradeColumns{grid-template-columns:1fr}}
+
+/* Pixel Haven v6.7: illustrated, inventory-backed live trading */
+.liveGamePanel{width:min(860px,96vw)}
+.liveGamePanel .liveTradeColumns{grid-template-columns:repeat(2,minmax(0,1fr))}
+.liveTradeColumns section{background:linear-gradient(#f4fbff,#dcecf4);min-height:190px}
+.liveGamePanel .tradeSlotGrid,.liveGamePanel .tradeInventoryGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.liveGamePanel .tradeInventorySection{margin:14px 0;padding:12px;background:#f5fbfe;border:1px solid #a5c9d9;border-radius:10px}
+.liveGamePanel .tradeInventoryGrid{grid-template-columns:repeat(auto-fill,minmax(90px,1fr));max-height:205px;overflow-y:auto}
+.liveGamePanel .tradeFurnitureTile,.liveGamePanel .tradeEmptySlot{position:relative;min-width:0;min-height:95px;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px;background:linear-gradient(#fff,#d7e9f3);border:2px solid #a2bfd0;border-radius:9px;box-shadow:inset 0 2px 5px #7898a126;color:#214b63}
+.liveGamePanel button.tradeFurnitureTile{cursor:pointer}
+.liveGamePanel button.tradeFurnitureTile:hover{border-color:#4b9dc0;background:#e7f7ff}
+.liveGamePanel button.tradeFurnitureTile.selected{border-color:#d29c2b;background:#fff2c9;box-shadow:inset 0 0 0 2px #f5ce74}
+.liveGamePanel .tradeFurnitureTile:disabled{opacity:.72;cursor:default}
+.liveGamePanel .tradeFurnitureArt{width:65px;height:65px;object-fit:contain}
+.liveGamePanel .tradeFurnitureFallback{font-size:32px}
+.liveGamePanel .tradeFurnitureFallback[hidden]{display:none}
+.liveGamePanel .tradeFurnitureTile small{font-size:10px;text-align:center;line-height:1.2;overflow-wrap:anywhere}
+.liveGamePanel .tradeFurnitureTile b{position:absolute;right:3px;top:3px;font-size:10px;background:#2b617f;color:#fff;padding:2px 5px;border-radius:8px}
+.liveGamePanel .tradeEmptySlot{border-style:dashed;background:#edf5f9}
+.liveGamePanel .tradeOfferSummary{background:#e6f2f8;border:1px solid #b3d1df;border-radius:9px;padding:10px}
+.liveGamePanel .tradeQuantityRow{display:flex;align-items:center;gap:6px;border-top:1px solid #bdd5e2;margin-top:5px}
+.liveGamePanel .tradeQuantityRow span{flex:1;font-size:12px}
+.liveGamePanel .tradeQuantityRow button{min-width:30px;margin:2px;padding:5px}
+.liveGamePanel .tradeLockStatus{padding:9px;background:#cce6f2;border-radius:7px;font-weight:700}
+.liveGamePanel button.tradeConfirm{background:linear-gradient(#c2efcc,#70c58a);border-color:#428d5b;color:#123d25;font-weight:900}
+@media(max-width:620px){.liveGamePanel .tradeSlotGrid{grid-template-columns:repeat(4,minmax(0,1fr))}.liveGamePanel .tradeFurnitureTile,.liveGamePanel .tradeEmptySlot{min-height:80px}.liveGamePanel .tradeFurnitureArt{width:48px;height:48px}.liveGamePanel .tradeFurnitureTile small{font-size:9px}}
