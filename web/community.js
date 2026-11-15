@@ -173,17 +173,16 @@ setInterval(()=>{if(localStorage.getItem('pixel_token'))refreshSocialBadge().cat
 window.pixelShowPlayer=async player=>{
  try{
   if(!user)await me();
-  if(Number(player.id)===Number(user.id))return;
+  const self=Number(player.id)===Number(user.id);
   await open('social');
   const p=el('article');p.className='socialProfile communityCase';
-  p.append(el('h3','👤 '+player.username),el('p','Player profile · '+(player.role||'guest')));
+  p.append(el('h3','👤 '+player.username+(self?' (You)':'')),el('p','Player profile · '+(player.role||'guest')));
   const badgeBox=el('div');badgeBox.className='playerBadges';p.append(badgeBox);
   try{const badges=await api('/users/'+player.id+'/badges');if(!badges.length)badgeBox.append(el('small','No badges yet'));for(const b of badges){const item=el('div');item.className='playerBadge';const img=el('img');img.src=b.image_path;img.alt=b.name;img.title=b.name+' ('+b.code+')';img.onerror=()=>{img.hidden=true;item.append(el('strong',b.code))};item.append(img,el('small',b.name));badgeBox.append(item)}}catch(e){badgeBox.append(el('small',e.message))}
 
   const controls=el('div');controls.className='communityActions';p.append(controls);
-  controls.append(button('Find & Add Friend',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'request'});p.append(el('p','Friend request sent'))}catch(e){p.append(el('p',e.message))}}));
-  controls.append(button('Message / Friends',()=>select('social')));
-  controls.append(button('Trade',()=>select('trade')));
+  if(!self)controls.append(button('Find & Add Friend',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'request'});p.append(el('p','Friend request sent'))}catch(e){p.append(el('p',e.message))}}));
+  if(!self){controls.append(button('Message / Friends',()=>select('social')));controls.append(button('Trade',()=>select('trade')))}
   body.prepend(p);
  }catch(e){console.warn(e)}
 };
