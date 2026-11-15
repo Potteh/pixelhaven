@@ -115,6 +115,12 @@ window.drawAvatar=function(p){
  const dx=p.x-m.x,dy=p.y-m.y,dist=Math.hypot(dx,dy);
  if(dist>.001){m.dir=facing(dx,dy,m.dir);const step=Math.min(dist,dt*4.3);m.x+=dx/dist*step;m.y+=dy/dist*step;m.stride+=step*2.8}
  const seated=p.pose?.type==='sit',frame=!seated&&dist>.045?1+Math.floor(m.stride)%3:0;
+ // Seats fix facing and pose independently of the direction the guest approached.
+ if(seated){
+   const seat=typeof furniture!=='undefined'?furniture.find(f=>Number(f.id)===Number(p.pose.seatId)):null;
+   const rotation=((Number(seat?.rotation)||0)%4+4)%4;
+   m.dir=['front','right','back','left'][rotation];
+ }
  const pos=tile(m.x,m.y),x=pos.x,y=pos.y;
  ctx.save();ctx.fillStyle='#10182a55';ctx.beginPath();ctx.ellipse(x,y+3,16,5,0,0,Math.PI*2);ctx.fill();
  const im=sprite(p.user.avatar||{},m.dir,frame);
@@ -122,11 +128,14 @@ window.drawAvatar=function(p){
  const bounce=emote==='cheer'?Math.abs(Math.sin(now/110))*7:emote==='dance'?Math.abs(Math.sin(now/145))*5:0;
  const sway=emote==='dance'?Math.sin(now/170)*.12:emote==='laugh'?Math.sin(now/95)*.04:0;
  ctx.translate(x,y-bounce);ctx.rotate(sway);
- if(im.complete&&im.naturalWidth){
-   if(seated)ctx.drawImage(im,0,0,84,79,-42,-99,84,79);
-   else ctx.drawImage(im,-42,-112,84,110);
- }
- if(seated){ctx.fillStyle='#425674';ctx.fillRect(-18,-20,36,10);ctx.fillStyle='#252c3d';ctx.fillRect(-20,-11,16,7);ctx.fillRect(4,-11,16,7)}
+ if(seated){
+   // Draw bent legs at the seat cushion, then the upper body without standing legs.
+   const pants=valid(p.user.avatar?.pantsColor,'#425674'),shoes=valid(p.user.avatar?.shoeColor,'#1c2535');
+   ctx.fillStyle=pants;
+   ctx.beginPath();ctx.moveTo(-18,-31);ctx.lineTo(17,-31);ctx.lineTo(22,-19);ctx.lineTo(-22,-19);ctx.closePath();ctx.fill();
+   ctx.fillStyle=shoes;ctx.fillRect(-22,-20,18,7);ctx.fillRect(4,-20,18,7);
+   if(im.complete&&im.naturalWidth)ctx.drawImage(im,0,0,84,78,-42,-106,84,78);
+ }else if(im.complete&&im.naturalWidth)ctx.drawImage(im,-42,-112,84,110);
  if(emote==='wave'||emote==='cheer'){
    ctx.save();ctx.rotate(emote==='wave'?Math.sin(now/125)*.08:0);
    ctx.fillStyle=valid(p.user.avatar?.shirt,'#4b86e8');ctx.fillRect(24,-92,9,27);
