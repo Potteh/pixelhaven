@@ -24,31 +24,48 @@
     const block=(x,y,w,h,color)=>{g.fillStyle=color;g.fillRect(Math.round(x),Math.round(y),w,h)};
     const back=dir==='back', side=dir==='left'||dir==='right', flip=dir==='left';
     g.save();if(flip){g.translate(34,0);g.scale(-1,1)}
-    const swing=frame===1?2:frame===3?-2:0;
-    // Animated trousers and shoes
-    block(10,38+swing,6,10,palette.outline);block(11,38+swing,4,9,palette.jeans);
-    block(19,38-swing,6,10,palette.outline);block(20,38-swing,4,9,palette.jeans);
-    block(9,47+swing,8,4,palette.shoes);block(19,47-swing,8,4,palette.shoes);
-    block(10,48+swing,5,1,'#e5e5ed');block(20,48-swing,5,1,'#e5e5ed');
-    // Jacket, collar and arms
-    block(8,23,19,18,palette.outline);block(9,24,17,16,shirt);
-    block(9,24,3,15,tint(shirt,-30));block(22,24,3,15,tint(shirt,-24));
-    block(5,26+(frame%2),5,13,palette.outline);block(6,27+(frame%2),3,10,shirt);
-    block(26,26-(frame%2),5,13,palette.outline);block(27,27-(frame%2),3,10,shirt);
-    block(6,36+(frame%2),3,3,skin);block(27,36-(frame%2),3,3,skin);
-    if(!back){block(16,25,2,13,tint(shirt,55));block(15,24,4,3,'#f3eee4')}
-    // Neck and head
+    // Four distinct walk poses: planted feet, crossing stride, and head counter-sway.
+    const walking=frame!==0,phase=frame===1?1:frame===2?0:frame===3?-1:0;
+    const lift=walking&&(frame===1||frame===3)?1:0;
+    const headShift=phase===1?-1:phase===-1?1:0;
+    const bodyShift=phase===1?1:phase===-1?-1:0;
+    const leftStride=phase*4,rightStride=-phase*4;
+    // Far leg first, then near leg: stepping actually changes the silhouette.
+    block(19+rightStride,37+Math.max(0,phase)*2,7,13,palette.outline);
+    block(20+rightStride,38+Math.max(0,phase)*2,5,10,palette.jeans);
+    block(19+rightStride,48+Math.max(0,phase)*2,9,4,palette.shoes);
+    block(20+rightStride,49+Math.max(0,phase)*2,5,1,'#e5e5ed');
+    block(9+leftStride,37+Math.max(0,-phase)*2,7,13,palette.outline);
+    block(10+leftStride,38+Math.max(0,-phase)*2,5,10,palette.jeans);
+    block(8+leftStride,48+Math.max(0,-phase)*2,10,4,palette.shoes);
+    block(9+leftStride,49+Math.max(0,-phase)*2,6,1,'#e5e5ed');
+    // Opposing arm swing, subtle torso bob and shoulder rotation.
+    const bob=walking?(frame===2?1:-lift):0;
+    block(8+bodyShift,23+bob,19,18,palette.outline);
+    block(9+bodyShift,24+bob,17,16,shirt);
+    block(9+bodyShift,24+bob,3,15,tint(shirt,-30));
+    block(22+bodyShift,24+bob,3,15,tint(shirt,-24));
+    const leftArm=-phase*3,rightArm=phase*3;
+    block(5+leftArm,26+bob+Math.max(0,phase),5,13,palette.outline);
+    block(6+leftArm,27+bob+Math.max(0,phase),3,10,shirt);
+    block(26+rightArm,26+bob+Math.max(0,-phase),5,13,palette.outline);
+    block(27+rightArm,27+bob+Math.max(0,-phase),3,10,shirt);
+    block(6+leftArm,36+bob+Math.max(0,phase),3,3,skin);
+    block(27+rightArm,36+bob+Math.max(0,-phase),3,3,skin);
+    if(!back){block(16+bodyShift,25+bob,2,13,tint(shirt,55));block(15+bodyShift,24+bob,4,3,'#f3eee4')}
+    // Head moves independently of the torso; hair and face follow the tilt.
+    g.save();g.translate(headShift,bob+(walking&&frame===2?1:0));
     block(14,20,8,6,palette.outline);block(15,20,6,5,skin);
     block(side?11:9,6,side?16:18,18,palette.outline);
     block(side?12:10,7,side?14:16,16,skin);
     block(side?13:11,18,side?12:14,4,tint(skin,-16));
-    // Hair silhouette with individual pixel tufts
     block(9,4,19,9,palette.outline);block(10,3,17,8,hair);
     block(12,2,12,3,tint(hair,20));block(8,8,5,8,hair);
     block(24,7,4,8,hair);block(11,5,6,2,tint(hair,33));
     if(back){block(11,12,15,9,hair);block(13,20,11,2,tint(hair,-20))}
     else if(side){block(21,14,2,2,palette.eye);block(24,19,2,1,palette.mouth)}
     else {block(13,15,2,2,palette.eye);block(22,15,2,2,palette.eye);block(17,20,4,1,palette.mouth)}
+    g.restore();
     g.restore();
     atlas.set(key,c);if(atlas.size>512)atlas.clear();
     return c;
@@ -63,12 +80,12 @@
     if(!p||!p.user)return original(p);
     const id=p.socketId||p.user.id||p.user.username;
     let m=motion.get(id);
-    if(!m){m={x:p.x,y:p.y,dir:'front',last:performance.now()};motion.set(id,m)}
+    if(!m){m={x:p.x,y:p.y,dir:'front',last:performance.now(),stride:0};motion.set(id,m)}
     const now=performance.now(),dt=Math.min((now-m.last)/1000,.06);m.last=now;
     const dx=p.x-m.x,dy=p.y-m.y,dist=Math.hypot(dx,dy);
-    if(dist>.001){m.dir=direction(dx,dy,m.dir);const step=Math.min(dist,dt*4.3);m.x+=dx/dist*step;m.y+=dy/dist*step}
+    if(dist>.001){m.dir=direction(dx,dy,m.dir);const step=Math.min(dist,dt*4.3);m.x+=dx/dist*step;m.y+=dy/dist*step;m.stride+=step*2.8}
     const walking=dist>.045;
-    const frame=walking?Math.floor(now/135)%4:0;
+    const frame=walking?1+Math.floor(m.stride)%3:0;
     const pos=tile(m.x,m.y),x=pos.x,y=pos.y;
     ctx.fillStyle='#10182a66';ctx.beginPath();ctx.ellipse(x,y+4,17,6,0,0,Math.PI*2);ctx.fill();
     const sprite=makeSprite(p.user.avatar||{},m.dir,frame);
@@ -86,5 +103,5 @@
   window.pixelAvatarPosition=id=>{const m=motion.get(id);return m?tile(m.x,m.y):null;};
   // Remove old interpolation entries after room transitions and disconnects.
   setInterval(()=>{if(typeof players==='undefined')return;for(const id of motion.keys())if(!players.has(id))motion.delete(id)},10000);
-  console.info('[Pixel Haven] v4 directional avatar sprite atlas loaded');
+  console.info('[Pixel Haven] v4.8 articulated avatar walk cycle loaded');
 })();
