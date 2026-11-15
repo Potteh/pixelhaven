@@ -29,7 +29,22 @@ const fail=(res,e)=>{console.error(e);res.status(500).json({error:'Server error'
 app.post('/api/register',async(req,res)=>{try{const username=safe(req.body.username,24),password=String(req.body.password||'');if(!/^[a-zA-Z0-9_]{3,24}$/.test(username)||password.length<8||password.length>128)return res.status(400).json({error:'Username: 3-24 letters/numbers/underscores; password: 8-128 characters'});const hash=await bcrypt.hash(password,12);const r=await pool.query('INSERT INTO users(username,password_hash) VALUES($1,$2) RETURNING id',[username,hash]);res.json({token:token(r.rows[0]),user:await getUser(r.rows[0].id)});}catch(e){if(e.code==='23505')return res.status(409).json({error:'Username already exists'});fail(res,e);}});
 app.post('/api/login',async(req,res)=>{try{const r=await pool.query('SELECT * FROM users WHERE lower(username)=lower($1)',[safe(req.body.username,24)]);const u=r.rows[0];if(!u||!await bcrypt.compare(String(req.body.password||''),u.password_hash))return res.status(401).json({error:'Invalid credentials'});const ban=await pool.query('SELECT 1 FROM bans WHERE user_id=$1 AND (expires_at IS NULL OR expires_at>now())',[u.id]);if(ban.rowCount)return res.status(403).json({error:'Account suspended'});res.json({token:token(u),user:await getUser(u.id)});}catch(e){fail(res,e);}});
 app.get('/api/me',auth,(req,res)=>res.json(req.user));
-app.patch('/api/avatar',auth,async(req,res)=>{try{const a=req.body;const colors=['#e8ad7d','#a96b46','#f2cba5','#6d4535','#4b86e8','#ef7d82','#72c49a','#9b7de5','#493323','#1c2535','#f5ca59','#ffffff'];if(!a||!['skin','shirt','hair'].every(k=>colors.includes(a[k])))return res.status(400).json({error:'Invalid avatar colors'});await pool.query('UPDATE users SET avatar=$1 WHERE id=$2',[JSON.stringify(a),req.user.id]);res.json(await getUser(req.user.id));}catch(e){fail(res,e);}});
+app.patch('/api/avatar',auth,async(req,res)=>{
+ try{
+  const a=req.body;
+  const colors=['#e8ad7d','#a96b46','#f2cba5','#6d4535','#4b86e8','#ef7d82','#72c49a','#9b7de5','#493323','#1c2535','#f5ca59','#ffffff'];
+  const options={hairstyle:['short','spiky','long','buzz','sidepart'],face:['smile','neutral','happy','wink'],outfit:['tee','hoodie','jacket'],accessory:['none','glasses','cap','headphones']};
+  if(!a||!['skin','shirt','hair'].every(k=>colors.includes(a[k]))||Object.entries(options).some(([k,values])=>a[k]!==undefined&&!values.includes(a[k])))return res.status(400).json({error:'Invalid avatar options'});
+  const avatar=Object.fromEntries([...['skin','shirt','hair'].map(k=>[k,a[k]]),...Object.entries(options).map(([k,values])=>[k,a[k]||values[0]])]);
+  await pool.query('UPDATE users SET avatar=$1 WHERE id=$2',[JSON.stringify(avatar),req.user.id]);
+  const user=await getUser(req.user.id);req.user.avatar=user.avatar;
+  for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===req.user.id){
+    socket.data.user.avatar=user.avatar;
+    if(socket.data.roomId)io.to('room:'+socket.data.roomId).emit('player:avatar',{socketId:socket.id,avatar:user.avatar});
+  }
+  res.json(user);
+ }catch(e){fail(res,e)}
+});
 app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id WHERE r.is_public OR r.owner_id=$1 ORDER BY r.id LIMIT 100',[req.user.id])).rows);}catch(e){fail(res,e);}});
 app.post('/api/rooms',auth,async(req,res)=>{try{const name=safe(req.body.name,64);if(name.length<3)return res.status(400).json({error:'Room name too short'});const count=await pool.query('SELECT count(*)::int AS n FROM rooms WHERE owner_id=$1',[req.user.id]);if(count.rows[0].n>=10)return res.status(400).json({error:'Room limit reached'});const r=await pool.query('INSERT INTO rooms(owner_id,name,description,is_public) VALUES($1,$2,$3,$4) RETURNING *',[req.user.id,name,safe(req.body.description,240),req.body.is_public!==false]);res.json(r.rows[0]);}catch(e){fail(res,e);}});
 app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
