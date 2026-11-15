@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s),canvas=$('#game'),ctx=canvas.getContext('2d');
 let token=localStorage.getItem('pixel_token'),me=null,socket=null,room=null,players=new Map(),furniture=[],selected=null,rotateMode=false,rotationTarget=null,catalog={},inventory=[],authRegister=false,chatBubbles=new Map();
 const colors=['#e8ad7d','#a96b46','#f2cba5','#6d4535','#4b86e8','#ef7d82','#72c49a','#9b7de5','#493323','#1c2535','#f5ca59','#ffffff'];
-const emoji={chair:'🪑',sofa:'🛋️',table:'🪵',plant:'🪴',lamp:'💡',bed:'🛏️',arcade:'🕹️',club_sofa:'🛋️',royal_throne:'👑',ice_cream_machine:'🍦',fridge:'🧊',vending_machine:'🥤',teleporter:'🌀',door:'🚪',smoke_machine:'🌫️',christmas_tree:'🎄',christmas_sofa:'🛋️',christmas_fireplace:'🔥',snowman:'⛄',gift_stack:'🎁',candy_cane_lamp:'🍬',festive_rug:'❄️',gold_bar:'🪙',nickel:'🥉',quarter:'🪙'};
+const emoji={neon_arcade:'🎮',golden_fountain:'⛲',autumn_throne:'🍁',moon_lamp:'🌙',bookshelf:'📚',aquarium:'🐠',autumn_tree:'🍂',pumpkin_lantern:'🎃',star_rug:'⭐',chair:'🪑',sofa:'🛋️',table:'🪵',plant:'🪴',lamp:'💡',bed:'🛏️',arcade:'🕹️',club_sofa:'🛋️',royal_throne:'👑',ice_cream_machine:'🍦',fridge:'🧊',vending_machine:'🥤',teleporter:'🌀',door:'🚪',smoke_machine:'🌫️',christmas_tree:'🎄',christmas_sofa:'🛋️',christmas_fireplace:'🔥',snowman:'⛄',gift_stack:'🎁',candy_cane_lamp:'🍬',festive_rug:'❄️',gold_bar:'🪙',nickel:'🥉',quarter:'🪙'};
 function toast(s){$('#toast').textContent=s;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',3200)}
 async function api(url,method='GET',data){const r=await fetch('/api'+url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data?JSON.stringify(data):undefined});const j=await r.json();if(!r.ok){const error=Error(j.error||'Request failed');error.status=r.status;throw error;}return j}
 function tile(x,y,z=0){return {x:500+(x-y)*43,y:118+(x+y)*24-z}}
@@ -45,6 +45,15 @@ function drawFurniture(f){const p=tile(f.x,f.y),x=p.x,y=p.y,k=f.kind;
  else if(k==='plant'){isoBox(x,y,14,10,19,'#e9b27a','#94614a','#b67a53');for(let i=0;i<7;i++){let ang=i*Math.PI*2/7;line(x,y-23,x+Math.cos(ang)*20,y-44+Math.sin(ang)*10,'#2b684d',6);ellipse(x+Math.cos(ang)*20,y-44+Math.sin(ang)*10,9,5,i%2?'#4fa66b':'#75c97b')}}
  else if(k==='lamp'){isoBox(x,y,11,9,8,'#d9aa6b','#87634d','#b28b63');line(x,y-9,x,y-47,'#e9c99b',4);poly([[x-14,y-50],[x+14,y-50],[x+9,y-35],[x-9,y-35]],'#ffe6a4','#a67954');ellipse(x,y-39,22,10,'#ffd27d22')}
  else if(k==='arcade'){isoBox(x,y-14,19,12,44,'#7b75d9','#383d82','#5253ac');poly([[x-12,y-60],[x+12,y-60],[x+12,y-38],[x-12,y-38]],'#1b2a4b','#161b39');ctx.fillStyle='#5ae7dc';ctx.fillRect(x-8,y-56,16,12);ctx.fillStyle='#ffd579';ctx.fillRect(x-4,y-32,8,4)}
+ else if(k==='neon_arcade'){isoBox(x,y-14,19,12,44,'#c457f7','#44205e','#8136b2');poly([[x-13,y-61],[x+13,y-61],[x+13,y-36],[x-13,y-36]],'#131a3d','#f174ff',3);ctx.fillStyle='#55f7ff';ctx.fillRect(x-9,y-57,18,14);ellipse(x,y-28,5,3,'#ffcf50')}
+ else if(k==='golden_fountain'){isoBox(x,y,29,20,12,'#ffe38a','#8d602d','#cfa047');ellipse(x,y-17,24,9,'#73dfff');line(x,y-19,x,y-62,'#e7c16d',7);ellipse(x,y-61,12,6,'#ffec9b');for(const d of [-18,18])line(x,y-55,x+d,y-26,'#91eaff',3)}
+ else if(k==='autumn_throne'){isoBox(x,y,24,16,20,'#db9c4d','#77442b','#a96739');isoBox(x,y-25,24,10,42,'#d36b32','#783b30','#b8562d');ellipse(x,y-62,12,7,'#ffc75e')}
+ else if(k==='moon_lamp'){isoBox(x,y,12,9,8,'#d8d9ee','#5b6385','#8994b5');line(x,y-7,x,y-40,'#9aa8d5',4);ellipse(x,y-48,17,18,'#f4e6a6');ellipse(x+7,y-53,14,17,'#202541')}
+ else if(k==='bookshelf'){isoBox(x,y-15,26,12,62,'#c9945b','#5e3d33','#98613f');for(const dy of [-68,-44,-20]){line(x-17,y+dy,x+17,y+dy,'#f4c27b',5);for(let j=-2;j<=2;j++){ctx.fillStyle=['#e76868','#71b7c7','#9d8fd6','#e9d087','#76b98e'][j+2];ctx.fillRect(x+j*7-3,y+dy-18,6,16)}}}
+ else if(k==='aquarium'){isoBox(x,y-18,28,17,35,'#7bd8e9','#32677b','#4b9cb5');poly([[x-21,y-54],[x+21,y-54],[x+21,y-23],[x-21,y-23]],'#3a9dbb','#285a80');ellipse(x-6,y-40,7,4,'#ffcc72');ellipse(x+10,y-30,5,3,'#f3a66c');line(x,y-22,x,y-12,'#36596e',6)}
+ else if(k==='autumn_tree'){isoBox(x,y,12,9,15,'#c99562','#825237','#aa724b');line(x,y-15,x,y-57,'#815338',8);for(let j=0;j<8;j++){const ang=j*Math.PI/4;ellipse(x+Math.cos(ang)*19,y-65+Math.sin(ang)*13,15,12,j%2?'#db7137':'#f3b04d')}}
+ else if(k==='pumpkin_lantern'){ellipse(x,y-16,22,19,'#df7b31');line(x,y-34,x+4,y-42,'#487548',5);poly([[x-12,y-21],[x-4,y-24],[x-7,y-13]],'#372a35');poly([[x+4,y-24],[x+12,y-21],[x+7,y-13]],'#372a35');line(x-8,y-8,x+8,y-8,'#3b2933',4)}
+ else if(k==='star_rug'){poly([[x,y-18],[x+10,y-6],[x+28,y-4],[x+14,y+6],[x+18,y+21],[x,y+13],[x-18,y+21],[x-14,y+6],[x-28,y-4],[x-10,y-6]],'#f1c66b','#805f91',3)}
  else isoBox(x,y,20,14,22);
 }
 function mixRoomColor(hex,amount){const n=parseInt(hex.slice(1),16);if(!Number.isFinite(n))return hex;const values=[(n>>16)&255,(n>>8)&255,n&255].map(v=>Math.max(0,Math.min(255,Math.round(v+(amount>0?(255-v)*amount:v*amount)))));return '#'+values.map(v=>v.toString(16).padStart(2,'0')).join('')}
@@ -209,40 +218,41 @@ window.join=join;
 function connect(){socket=io({auth:{token}});socket.on('social:changed',()=>window.dispatchEvent(new Event('pixel:social-update')));socket.on('social:message',msg=>{window.dispatchEvent(new Event('pixel:social-update'));if(Number(msg.recipient_id)===Number(me?.id))window.dispatchEvent(new CustomEvent('pixel:social-message',{detail:msg}))});socket.on('connect',()=>join(1));socket.on('connect_error',e=>toast(e.message));socket.on('room:updated',updated=>{if(room&&Number(updated.id)===Number(room.id)){room=updated;$('#roomTitle').textContent='🏨 '+room.name;updateGuests()}});socket.on('room:kicked',data=>{toast(data.reason||'You were removed from the room');join(1)});socket.on('room:entry-request',data=>{toast('🔔 A guest requested entry to your locked room. Open Room-O-Matic → Your Rooms → Entry Requests.')});socket.on('room:entry-decision',data=>{toast(data.status==='approved'?'✓ Your locked room entry request was approved! Open the Room Navigator to enter.':'Your locked room entry request was denied.')});socket.on('account:changed',async data=>{if(data&&Number.isFinite(Number(data.coins))&&data.coins!==undefined){me.coins=Number(data.coins);identity()}else await refreshCoinBalance()});socket.on('player:joined',p=>{players.set(p.socketId,p);updateGuests()});socket.on('player:left',id=>{players.delete(id);chatBubbles.delete(id);updateGuests()});socket.on('player:identity',p=>{const player=players.get(p.socketId);if(player){player.user=p.user;updateGuests()}});socket.on('player:avatar',p=>{const a=players.get(p.socketId);if(a)a.user.avatar=p.avatar});socket.on('player:held',p=>{const a=players.get(p.socketId);if(a)a.held=p.held;const drop=document.getElementById('dropHeldFood');if(drop&&p.socketId===socket.id)drop.hidden=!p.held});socket.on('player:pose',p=>{const a=players.get(p.socketId);if(a)a.pose=p.pose});socket.on('player:emote',p=>{const a=players.get(p.socketId);if(a)a.emote={name:p.name,until:p.until}});socket.on('player:moved',p=>{const a=players.get(p.socketId);if(a){a.x=p.x;a.y=p.y}});socket.on('chat:message',m=>{if(m.socketId&&players.has(m.socketId)){const now=Date.now(),entry=chatBubbles.get(m.socketId)||{messages:[]};entry.messages=entry.messages.filter(v=>v.until>now);entry.messages.push({text:String(m.body||''),until:now+7500});entry.messages=entry.messages.slice(-3);chatBubbles.set(m.socketId,entry)}});socket.on('furniture:added',f=>furniture.push(f));socket.on('furniture:moved',data=>{const f=furniture.find(v=>v.id===data.id);if(f){f.x=data.x;f.y=data.y}});socket.on('furniture:effect',data=>{furnitureEffects.set(data.id,data)});socket.on('furniture:rotated',data=>{const f=furniture.find(item=>item.id===data.id);if(f)f.rotation=data.rotation;});socket.on('furniture:removed',id=>{furniture=furniture.filter(f=>f.id!==id)});socket.on('moderation:warning',data=>{alert('Hotel staff warning: '+String(data.reason||'Please follow hotel rules'))});socket.on('trade:updated',()=>{toast('Your trade has been updated');loadInventory().catch(()=>{})});socket.on('disconnect',()=>{$('#online').textContent='Disconnected'})}
 async function loadRooms(){const rooms=await api('/rooms');$('#rooms').replaceChildren();for(const r of rooms){const b=document.createElement('div');b.className='roomButton';b.dataset.roomId=String(r.id);b.textContent='🚪 '+r.name;const s=document.createElement('small');s.textContent=r.description||'Visit this room';b.append(s);b.onclick=()=>join(r.id);$('#rooms').append(b)}}
 async function loadInventory(){inventory=await api('/inventory');$('#inventory').replaceChildren();for(const item of inventory.filter(i=>i.quantity>0)){const b=document.createElement('button');b.className='invItem'+(selected===item.kind?' selected':'');b.textContent=(emoji[item.kind]||'📦')+' '+item.kind+' ×'+item.quantity;b.onclick=()=>{if(['gold_bar','nickel','quarter'].includes(item.kind)){toast('Trade or redeem this coin token; it cannot be placed on the floor');return;}selected=selected===item.kind?null:item.kind;$('#placement').textContent=selected?'Placing '+selected+' — click a tile':'';loadInventory()};$('#inventory').append(b);if(['gold_bar','nickel','quarter'].includes(item.kind)){const redeem=document.createElement('button');redeem.type='button';redeem.className='invItem';redeem.textContent='💰 Redeem 1';redeem.onclick=async()=>{try{const result=await api('/redeem','POST',{kind:item.kind,quantity:1});me.coins=result.coins;identity();await loadInventory();toast('Redeemed '+item.kind)}catch(e){toast(e.message)}};$('#inventory').append(redeem)}}}
-function renderCatalog(){
+async function renderCatalog(){
  const root=$('#catalog');root.replaceChildren();
- const collections=[
-  {name:'Essentials',icon:'🏡',description:'Everyday comforts',items:['chair','sofa','table','plant','lamp','bed','arcade']},
-  {name:'Royal & Club',icon:'👑',description:'Exclusive-looking luxury pieces',items:['club_sofa','royal_throne']},
-  {name:'Novelty',icon:'🍦',description:'Machines and playful decorations',items:['ice_cream_machine','fridge','vending_machine','teleporter','door','smoke_machine']},
-  {name:'Winter Wonderland',icon:'🎄',description:'Seasonal festive furniture',items:['christmas_tree','christmas_sofa','christmas_fireplace','snowman','gift_stack','candy_cane_lamp','festive_rug']},
-  {name:'Coin Exchange',icon:'💰',description:'Physical currency you can trade or redeem',items:['nickel','quarter','gold_bar']}
- ];
- const header=document.createElement('div');header.className='catalogHero';
- header.innerHTML='<div class="catalogEyebrow">PIXEL HAVEN • FURNI SHOP</div><strong>Decorate your world</strong><small>Discover themed collections and collect original furniture.</small>';
- const tabs=document.createElement('div');tabs.className='catalogTabs';
+ const title=document.createElement('div');title.className='catalogHero';
+ title.innerHTML='<div class="catalogEyebrow">PIXEL HAVEN • FURNI SHOP 3.0</div><strong>Collect your style</strong><small>New furniture, rare finds, and limited editions.</small>';
+ const controls=document.createElement('div');controls.className='catalogControls';
+ const search=document.createElement('input');search.type='search';search.placeholder='Search furniture';
+ const collection=document.createElement('select'),rarity=document.createElement('select');
  const grid=document.createElement('div');grid.className='catalogGrid';
- const title=document.createElement('div');title.className='catalogCollectionTitle';
- root.append(header,tabs,title,grid);
- let current=0;
- function show(index){
-  current=index;tabs.querySelectorAll('button').forEach((btn,i)=>{btn.classList.toggle('active',i===index);btn.setAttribute('aria-pressed',String(i===index))});
-  const group=collections[index];title.textContent=group.icon+' '+group.name+' · '+group.description;grid.replaceChildren();
-  for(const kind of group.items){
-   if(catalog[kind]===undefined)continue;
+ const info=document.createElement('p');root.append(title,controls,info,grid);controls.append(search,collection,rarity);
+ let entries=[];
+ try{entries=await api('/catalog/details')}catch(e){info.textContent=e.message;return}
+ const groups=['All Collections',...new Set(entries.map(x=>x.collection))];
+ const rarities=['All Rarities','common','uncommon','rare','epic','legendary'];
+ for(const name of groups){const opt=document.createElement('option');opt.value=name;opt.textContent=name;collection.append(opt)}
+ for(const name of rarities){const opt=document.createElement('option');opt.value=name;opt.textContent=name==='All Rarities'?name:name.toUpperCase();rarity.append(opt)}
+ const paint=()=>{
+  grid.replaceChildren();
+  const filtered=entries.filter(x=>(collection.value==='All Collections'||x.collection===collection.value)&&(rarity.value==='All Rarities'||x.rarity===rarity.value)&&(x.name+' '+x.description+' '+x.kind).toLowerCase().includes(search.value.toLowerCase()));
+  info.textContent=filtered.length+' items · limited editions have shared hotel-wide stock';
+  for(const entry of filtered){
    const item=document.createElement('article');item.className='catalogCard';
    const picture=document.createElement('div');picture.className='catalogPicture';
-   const preview=document.createElement('canvas');preview.width=128;preview.height=128;preview.setAttribute('aria-label',kind.replaceAll('_',' ')+' preview');picture.append(preview);
-   window.drawFurniturePreview?.(preview,kind);
-   const name=document.createElement('strong');name.textContent=kind.replaceAll('_',' ').replace(/\\b\\w/g,c=>c.toUpperCase());
-   const price=document.createElement('span');price.className='catalogPrice';price.textContent='🪙 '+catalog[kind];
-   const buy=document.createElement('button');buy.type='button';buy.textContent='Buy';
-   buy.onclick=async()=>{buy.disabled=true;try{const result=await api('/buy','POST',{kind});me.coins=result.coins;identity();await loadInventory();toast('Purchased '+name.textContent)}catch(e){await refreshCoinBalance();toast(e.message)}finally{buy.disabled=false}};
-   item.append(picture,name,price,buy);grid.append(item);
+   const preview=document.createElement('canvas');preview.width=128;preview.height=128;picture.append(preview);
+   window.drawFurniturePreview?.(preview,entry.kind);
+   const name=document.createElement('strong');name.textContent=(emoji[entry.kind]||'🪑')+' '+entry.name;
+   const rarityLabel=document.createElement('span');rarityLabel.className='catalogRarity rarity-'+entry.rarity;rarityLabel.textContent=entry.rarity.toUpperCase();
+   const description=document.createElement('small');description.textContent=entry.description;
+   const price=document.createElement('span');price.className='catalogPrice';price.textContent='🪙 '+entry.price;
+   const stock=document.createElement('small');if(entry.limited)stock.textContent=entry.remaining+' / '+entry.initial_stock+' remaining';
+   const buy=document.createElement('button');buy.type='button';buy.textContent=entry.remaining===0?'Sold Out':'Buy';buy.disabled=entry.remaining===0;
+   buy.onclick=async()=>{buy.disabled=true;try{const result=await api('/buy','POST',{kind:entry.kind});me.coins=result.coins;identity();await loadInventory();toast('Purchased '+entry.name);if(entry.limited){entry.remaining--;stock.textContent=entry.remaining+' / '+entry.initial_stock+' remaining';if(entry.remaining<=0)buy.textContent='Sold Out'}}catch(e){await refreshCoinBalance();toast(e.message)}finally{buy.disabled=entry.limited&&entry.remaining<=0}};
+   item.append(picture,name,rarityLabel,description,price,stock,buy);grid.append(item);
   }
- }
- collections.forEach((group,i)=>{const button=document.createElement('button');button.type='button';button.textContent=group.icon+' '+group.name;button.setAttribute('aria-pressed','false');button.onclick=()=>show(i);tabs.append(button)});
- show(0);
+ };
+ search.oninput=paint;collection.onchange=paint;rarity.onchange=paint;paint();
 }
 const shopWindow=document.getElementById('shopWindow');
 document.getElementById('shopOpen')?.addEventListener('click',()=>{shopWindow.hidden=false;refreshCoinBalance();document.getElementById('shopClose')?.focus()});
