@@ -4,14 +4,14 @@ const $=s=>document.querySelector(s),el=(tag,txt)=>{const x=document.createEleme
 const api=async(path,method='GET',data)=>{const r=await fetch('/api'+path,{method,headers:{Authorization:'Bearer '+localStorage.getItem('pixel_token'),'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});const j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j};
 const shell=el('section');shell.className='communityPanel';shell.hidden=true;shell.innerHTML='<header class="communityHead"><strong>🛡️ Hotel Safety & Trading</strong><button type="button" id="communityClose">✕</button></header><nav class="communityTabs"><button data-community="report">Report</button><button data-community="trade">Trade</button><button data-community="staff">Mod Tools</button></nav><div id="communityBody"></div>';
 document.body.append(shell);
-const launcher=el('button','🛡️ Safety & Trading');launcher.className='communityLauncher';const right=document.querySelector('aside.right');right?.prepend(launcher);
+const launcher=document.getElementById('communityOpen');
 const body=shell.querySelector('#communityBody'),tabs=[...shell.querySelectorAll('[data-community]')];
 const status=msg=>{const p=el('p',msg);p.className='communityStatus';body.append(p)};
 const field=(label,control)=>{const w=el('label',label);w.append(control);return w};
 const input=(type='text',placeholder='')=>{const x=el('input');x.type=type;x.placeholder=placeholder;return x};
 const button=(txt,fn)=>{const b=el('button',txt);b.type='button';b.onclick=fn;return b};
 let current='report',user=null;
-async function me(){user=await api('/me');tabs.find(x=>x.dataset.community==='staff').hidden=!['owner','admin','moderator'].includes(user.role)}
+async function me(){user=await api('/me');const staff=['owner','admin','moderator'].includes(user.role);tabs.find(x=>x.dataset.community==='staff').hidden=!staff;const shortcut=document.getElementById('gameStaffShortcut');if(shortcut)shortcut.hidden=!staff}
 async function open(tab='report'){shell.hidden=false;try{await me();await select(tab)}catch(e){body.replaceChildren();status(e.message)}}
 async function select(tab){current=tab;tabs.forEach(x=>x.classList.toggle('active',x.dataset.community===tab));body.replaceChildren();if(tab==='report')await report();if(tab==='trade')await trade();if(tab==='staff')await staff()}
 launcher.onclick=()=>open();shell.querySelector('#communityClose').onclick=()=>shell.hidden=true;tabs.forEach(b=>b.onclick=()=>select(b.dataset.community));
@@ -33,5 +33,7 @@ actions.append(button('⚠️ Warn',()=>act('warn')));
 if(['admin','owner'].includes(user.role)){actions.append(button('⛔ Ban',()=>act('ban')),button('Unban',()=>act('unban')));body.append(field('Credit amount (positive or negative)',amount));actions.append(button('Adjust credits',()=>act('credits',{amount:Number(amount.value)})))}
 if(user.role==='owner'){body.append(field('Assign role',role));actions.append(button('Set role',()=>act('role',{role:role.value})))}
 }
+document.querySelectorAll('[data-game-action]').forEach(b=>b.addEventListener('click',async()=>{const action=b.dataset.gameAction;if(action==='rooms')document.getElementById('navigatorOpen')?.click();else if(action==='shop')document.getElementById('shopOpen')?.click();else if(action==='bag'||action==='avatar'){if(document.getElementById('hotelHub')?.hidden)document.getElementById('hubOpen')?.click();document.getElementById(action==='bag'?'hubTabInventory':'hubTabAvatar')?.click()}else if(['trade','report','staff'].includes(action))await open(action==='trade'?'trade':action)}));
+me().catch(()=>{});
 window.pixelCommunity={open};
 })();
