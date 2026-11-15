@@ -176,6 +176,28 @@ function art(kind){
   a+=path('M10 83 L64 52 L119 83 L64 115 Z','#d53f4e','#f2dba3',3);
   a+=path('M25 83 L64 61 L103 83 L64 106 Z','#26765a','#fff0c3',2);
   a+=path('M64 69 L69 80 L82 81 L72 90 L75 102 L64 95 L53 102 L56 90 L46 81 L59 80 Z','#f4dc9d','none');break;
+
+ case 'gold_bar':
+  a+=path('M24 75 L39 48 L92 48 L108 75 L95 96 L37 96 Z','#a97918','#77501b',2.5);
+  a+=path('M39 48 L92 48 L108 75 L24 75 Z','#ffe58c','#b17c24',2.5);
+  a+=path('M24 75 L108 75 L95 96 L37 96 Z','#d59a2d','#8e6021',2.5);
+  a+=path('M42 53 H88 L98 69 H32 Z','#f9d565','#fff2b3',1.6);
+  a+=line('M38 80 L94 80','#fff0a1',2);
+  a+=path('M51 58 H78 L83 66 H46 Z','#c28a2a','none');
+  a+=line('M56 62 H73','#ffec9a',1.5);break;
+ case 'nickel':
+ case 'quarter':{
+  const silver=kind==='nickel'?'#b9c8d3':'#d6e3eb',rim=kind==='nickel'?'#697c90':'#788ca4';
+  a+=ellipse(64,91,40,13,'#47566b');
+  a+=path('M24 69 Q64 49 104 69 L104 87 Q64 108 24 87 Z',rim,'#3b5066',2);
+  a+=ellipse(64,69,40,18,silver);
+  a+=ellipse(64,69,33,13,'#a5b7c7');
+  a+=ellipse(64,67,28,10,'#eaf3f7');
+  a+=line('M31 73 Q64 89 97 73','#f7fcff',2);
+  a+=path('M59 60 Q70 57 73 65 Q77 72 65 76 Q54 76 56 68 Q58 65 66 66','none','#71869b',3);
+  for(const x of [32,40,48,80,88,96])a+=line('M'+x+' 84 v7','#e2edf3',1);
+  break;
+ }
  default:
   a+=path('M25 65 L64 42 L104 65 L64 89 Z','url(#wood)')+path('M25 65 L64 89 L64 107 L25 83 Z','#936748')+path('M64 89 L104 65 L104 83 L64 107 Z','#b6845b');
  }
