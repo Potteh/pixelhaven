@@ -170,33 +170,66 @@ window.addEventListener('pixel:social-update',()=>{refreshSocialBadge().catch(co
 window.addEventListener('pixel:authenticated',()=>refreshSocialBadge().catch(console.warn));
 window.addEventListener('pixel:social-message',()=>{if(shell.hidden)notifySocial('✉️ New private message')});
 setInterval(()=>{if(localStorage.getItem('pixel_token'))refreshSocialBadge().catch(()=>{})},30000);
+// Independent profile dialog keeps the hotel and active conversations intact.
+const profileDialog=el('section');profileDialog.className='pixelProfileDialog';profileDialog.hidden=true;
+profileDialog.setAttribute('role','dialog');profileDialog.setAttribute('aria-modal','true');profileDialog.setAttribute('aria-label','Player profile');
+document.body.append(profileDialog);
+const closeProfile=()=>{profileDialog.hidden=true;profileDialog.replaceChildren()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!profileDialog.hidden)closeProfile()});
+profileDialog.addEventListener('click',e=>{if(e.target===profileDialog)closeProfile()});
 window.pixelShowPlayer=async player=>{
+ profileDialog.hidden=false;profileDialog.replaceChildren();
+ const panel=el('div');panel.className='pixelProfileCard';profileDialog.append(panel);
+ const head=el('header');head.className='pixelProfileHead';
+ head.append(el('h2','👤 Player Profile'),button('✕',closeProfile));panel.append(head);
+ const notice=el('p');notice.className='communityStatus';panel.append(notice);
  try{
   if(!user)await me();
-  const self=Number(player.id)===Number(user.id);
-  await open('social');
-  const p=el('article');p.className='socialProfile communityCase';
-  p.append(el('h3','👤 '+player.username+(self?' (You)':'')),el('p','Player profile · '+(player.role||'guest')));
-  const badgeBox=el('div');badgeBox.className='playerBadges';p.append(badgeBox);
-  try{const badges=await api('/users/'+player.id+'/badges');if(!badges.length)badgeBox.append(el('small','No badges yet'));for(const b of badges){const item=el('div');item.className='playerBadge';const img=el('img');img.src=b.image_path;img.alt=b.name;img.title=b.name+' ('+b.code+')';img.onerror=()=>{img.hidden=true;item.append(el('strong',b.code))};item.append(img,el('small',b.name));badgeBox.append(item)}}catch(e){badgeBox.append(el('small',e.message))}
-
-  const controls=el('div');controls.className='communityActions';p.append(controls);
-  if(!self){
-   try{
-    const friends=await api('/social/friends');
-    const relation=friends.find(f=>Number(f.id)===Number(player.id));
-    if(!relation){
-     controls.append(button('Send Friend Request',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'request'});await window.pixelShowPlayer(player)}catch(e){p.append(el('p',e.message))}}));
-    }else if(relation.status==='accepted'){
-     controls.append(el('span','✓ Friends'));
-    }else if(relation.direction==='incoming'){
-     controls.append(button('Accept Friend Request',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'accept'});await window.pixelShowPlayer(player)}catch(e){p.append(el('p',e.message))}}));
-    }else controls.append(el('span','⏳ Friend request pending'));
-   }catch(e){p.append(el('p',e.message))}
+  const id=Number(player.id),self=id===Number(user.id);
+  const profile=await api('/users/'+id+'/profile');
+  const title=el('h3',profile.username+(self?' (You)':''));panel.append(title);
+  panel.append(el('p','Member since '+new Date(profile.created_at).toLocaleDateString()+' · '+profile.role));
+  panel.append(el('p','🏠 '+profile.rooms_created+' rooms · 👥 '+profile.friend_count+' friends'));
+  panel.append(el('h4','💬 Motto'));
+  if(self){
+   const motto=input('text','Write your motto (120 characters max)');motto.maxLength=120;motto.value=profile.motto||'';
+   const row=el('div');row.className='communityActions';row.append(motto,button('Save Motto',async()=>{try{await api('/me/profile','PATCH',{motto:motto.value});notice.textContent='Motto saved'}catch(e){notice.textContent=e.message}}));panel.append(row);
+  }else panel.append(el('p',profile.motto||'No motto set'));
+  const equipped=profile.equipped.map(e=>e.code);
+  panel.append(el('h4','🏅 Featured Badges'));
+  const featured=el('div');featured.className='playerBadges';panel.append(featured);
+  function badgeItem(b){const item=el('div');item.className='playerBadge';const img=el('img');img.src=b.image_path;img.alt=b.name;img.title=b.code+' — '+b.name;img.onerror=()=>{img.hidden=true;item.append(el('strong',b.code))};item.append(img,el('small',b.name));return item}
+  for(const code of equipped){const badge=profile.badges.find(b=>b.code===code);if(badge)featured.append(badgeItem(badge))}
+  if(!featured.childElementCount)featured.append(el('p','No featured badges yet'));
+  panel.append(el('h4','Badge Collection'));
+  const collection=el('div');collection.className='playerBadges';panel.append(collection);
+  for(const badge of profile.badges)collection.append(badgeItem(badge));
+  if(!profile.badges.length)collection.append(el('p','No badges earned yet'));
+  if(self&&profile.badges.length){
+   const selected=[...equipped];const picker=el('div');picker.className='profileBadgePicker';panel.append(el('h4','Choose up to 3 featured badges'),picker);
+   for(const badge of profile.badges){const label=el('label');const check=el('input');check.type='checkbox';check.checked=selected.includes(badge.code);
+    check.onchange=()=>{if(check.checked){if(selected.length>=3){check.checked=false;notice.textContent='Maximum three featured badges';return}selected.push(badge.code)}else{const i=selected.indexOf(badge.code);if(i>=0)selected.splice(i,1)}};label.append(check,document.createTextNode(' '+badge.name+' ('+badge.code+')'));picker.append(label)}
+   panel.append(button('Save Featured Badges',async()=>{try{await api('/me/equipped-badges','PUT',{codes:selected});notice.textContent='Featured badges saved';await window.pixelShowPlayer(player)}catch(e){notice.textContent=e.message}}));
   }
-  if(!self){controls.append(button('Message / Friends',()=>select('social')));controls.append(button('Trade',()=>select('trade')))}
-  body.prepend(p);
- }catch(e){console.warn(e)}
+  panel.append(el('h4','🏆 Achievements'));
+  const achievements=el('div');panel.append(achievements);
+  if(!profile.achievements.length)achievements.append(el('p','No achievements unlocked yet'));
+  else for(const a of profile.achievements)achievements.append(el('p','🏆 '+a.code.replaceAll('_',' ')+' · '+new Date(a.earned_at).toLocaleDateString()));
+  if(!self){
+   const actions=el('div');actions.className='communityActions';panel.append(actions);
+   try{
+    const friends=await api('/social/friends');const relation=friends.find(f=>Number(f.id)===id);
+    const act=async action=>{try{await api('/social/friends/'+id,'POST',{action});await window.pixelShowPlayer(player)}catch(e){notice.textContent=e.message}};
+    if(!relation)actions.append(button('Send Friend Request',()=>act('request')));
+    else if(relation.status==='accepted')actions.append(el('span','✓ Friends'));
+    else if(relation.direction==='incoming')actions.append(button('Accept Friend Request',()=>act('accept')));
+    else actions.append(el('span','⏳ Friend request pending'));
+   }catch(e){notice.textContent=e.message}
+   actions.append(button('Friends & Messages',()=>{closeProfile();open('social')}));
+   actions.append(button('Trade',()=>{closeProfile();open('trade')}));
+  }
+ }catch(e){notice.textContent=e.message}
 };
+
 
 })();
