@@ -229,3 +229,9 @@ body.hotelViewActive{overflow:hidden}
 .liveGamePanel .tradeLockStatus{padding:9px;background:#cce6f2;border-radius:7px;font-weight:700}
 .liveGamePanel button.tradeConfirm{background:linear-gradient(#c2efcc,#70c58a);border-color:#428d5b;color:#123d25;font-weight:900}
 @media(max-width:620px){.liveGamePanel .tradeSlotGrid{grid-template-columns:repeat(4,minmax(0,1fr))}.liveGamePanel .tradeFurnitureTile,.liveGamePanel .tradeEmptySlot{min-height:80px}.liveGamePanel .tradeFurnitureArt{width:48px;height:48px}.liveGamePanel .tradeFurnitureTile small{font-size:9px}}
+
+/* v6.8: integrated hotel controls; no redundant left sidebar */
+main{grid-template-columns:minmax(0,1fr) 300px;max-width:1800px}
+#legacyHotelLaunchers[hidden],#shopWindow[hidden]{display:none!important}
+.center{grid-column:1;min-width:0}
+@media(max-width:1050px){main{grid-template-columns:minmax(0,1fr)}.center{grid-column:1}}
