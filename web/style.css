@@ -22,3 +22,21 @@ main{grid-template-columns:230px minmax(420px,1fr) 340px;align-items:start}
 #hubAvatar #avatarEditor{max-height:360px;overflow-y:auto}
 @media(max-width:1100px){main{grid-template-columns:220px minmax(0,1fr)}.right{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px}.right .hotelHub{grid-row:span 2}}
 @media(max-width:700px){main{display:flex;flex-direction:column}.right{display:block;width:100%}.center,main>aside{width:100%}.hotelHub{min-height:0}}
+
+/* v4.5: unified controls embedded inside the hotel viewport */
+main{grid-template-columns:230px minmax(0,1fr) 205px;max-width:1900px}
+.canvasWrap{position:relative}
+.canvasWrap .hotelHub[hidden]{display:none!important}
+.canvasWrap .hotelHub{position:absolute;right:14px;bottom:58px;width:min(355px,calc(100% - 28px));height:min(460px,calc(100% - 80px));min-height:0;z-index:5;margin:0;padding:12px;background:linear-gradient(145deg,#29354eeF,#111b30f7);border:2px solid #d5aa6c;border-radius:13px;box-shadow:0 15px 45px #070b18c9;display:flex;flex-direction:column;backdrop-filter:blur(8px)}
+.canvasWrap .hubTop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.canvasWrap .hubTitle{margin:0 0 8px;font-size:17px}
+.canvasWrap .hubClose{background:#452d40;color:#ffe2b4;border:1px solid #9e775d;box-shadow:none;padding:5px 10px;font-size:16px}
+.canvasWrap .hubPanel{min-height:0;flex:1;overflow:auto}
+.canvasWrap #hubChat{display:flex;flex-direction:column;overflow:hidden}
+.canvasWrap #hubChat #chat{height:auto;min-height:0;flex:1;overflow:auto}
+.canvasWrap #hubChat #chatForm{flex-shrink:0}
+.canvasWrap #hubInventory #inventory,.canvasWrap #hubAvatar #avatarEditor{max-height:none}
+.canvasWrap .hubOpen{position:absolute;right:14px;bottom:14px;z-index:4;font-size:12px;padding:9px 12px;border:1px solid #fff0b4}
+.canvasWrap .hint{max-width:calc(100% - 260px)}
+@media(max-width:1100px){main{grid-template-columns:200px minmax(0,1fr)}.right{grid-column:1/-1;display:block}.right .hotelHub{grid-row:auto}}
+@media(max-width:700px){main{display:flex;flex-direction:column}.canvasWrap .hotelHub{right:6px;bottom:44px;width:calc(100% - 12px);height:min(390px,calc(100% - 52px));padding:9px}.canvasWrap .hubOpen{right:7px;bottom:6px;font-size:11px;padding:7px}.canvasWrap .hint{left:7px;bottom:7px;max-width:calc(100% - 210px);font-size:9px;padding:5px}}
