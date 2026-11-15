@@ -45,7 +45,7 @@ app.patch('/api/avatar',auth,async(req,res)=>{
   res.json(user);
  }catch(e){fail(res,e)}
 });
-app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id WHERE r.is_public OR r.owner_id=$1 ORDER BY r.id LIMIT 100',[req.user.id])).rows);}catch(e){fail(res,e);}});
+app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id ORDER BY r.id LIMIT 100',[req.user.id])).rows);}catch(e){fail(res,e);}});
 const roomStyle=(body={})=>{
  const validColor=(v,fallback)=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:fallback;
  return {wall_color:validColor(body.wall_color,'#827b8f'),floor_color:validColor(body.floor_color,'#b3b8c8'),floor_pattern:['checker','solid','wood','tiles'].includes(body.floor_pattern)?body.floor_pattern:'checker',layout:['classic','lounge','studio'].includes(body.layout)?body.layout:'classic'};
@@ -63,8 +63,61 @@ app.patch('/api/rooms/:id',auth,async(req,res)=>{
   const isPublic=req.body.is_public===undefined?current.is_public:req.body.is_public===true;
   const updated=(await pool.query('UPDATE rooms SET name=$1,description=$2,is_public=$3,wall_color=$4,floor_color=$5,floor_pattern=$6,layout=$7 WHERE id=$8 AND owner_id=$9 RETURNING *',[name,description,isPublic,style.wall_color,style.floor_color,style.floor_pattern,style.layout,id,req.user.id])).rows[0];
   io.to('room:'+id).emit('room:updated',updated);
-  if(!isPublic)for(const sid of [...(occupants.get(id)||[])]){const guest=io.sockets.sockets.get(sid);if(guest&&guest.data.user.id!==req.user.id){leave(guest);guest.emit('room:kicked',{reason:'Room is now locked'});}}
+  if(!isPublic)await pool.query("DELETE FROM room_entry_requests WHERE room_id=$1 AND status='approved'",[id]);if(!isPublic)for(const sid of [...(occupants.get(id)||[])]){const guest=io.sockets.sockets.get(sid);if(guest&&guest.data.user.id!==req.user.id){leave(guest);guest.emit('room:kicked',{reason:'Room is now locked'});}}
   res.json(updated);
+ }catch(e){fail(res,e)}
+});
+// Locked-room requests are explicit; only the room owner can approve or deny them.
+app.post('/api/rooms/:id/request-entry',auth,async(req,res)=>{
+ const roomId=Number(req.params.id);if(!validId(roomId))return res.status(400).json({error:'Invalid room'});
+ try{
+  const room=(await pool.query('SELECT id,owner_id,is_public FROM rooms WHERE id=$1',[roomId])).rows[0];
+  if(!room)return res.sendStatus(404);
+  if(room.is_public||room.owner_id===req.user.id)return res.status(400).json({error:'You can already enter this room'});
+  const kicked=roomKickTimeouts.get(roomId+':'+req.user.id)||0;
+  if(kicked>Date.now())return res.status(403).json({error:'You were removed from this room; wait before requesting entry'});
+  const existing=(await pool.query('SELECT status FROM room_entry_requests WHERE room_id=$1 AND user_id=$2',[roomId,req.user.id])).rows[0];
+  if(existing?.status==='approved')return res.json({status:'approved'});
+  if(existing?.status==='pending')return res.json({status:'pending'});
+  const row=(await pool.query("INSERT INTO room_entry_requests(room_id,user_id,status,created_at,decided_at) VALUES($1,$2,'pending',now(),NULL) ON CONFLICT(room_id,user_id) DO UPDATE SET status='pending',created_at=now(),decided_at=NULL RETURNING id",[roomId,req.user.id])).rows[0];
+  for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===room.owner_id)socket.emit('room:entry-request',{roomId,requestId:row.id});
+  res.json({status:'pending'});
+ }catch(e){fail(res,e)}
+});
+app.get('/api/rooms/:id/requests',auth,async(req,res)=>{
+ const roomId=Number(req.params.id);if(!validId(roomId))return res.status(400).json({error:'Invalid room'});
+ try{
+  const room=(await pool.query('SELECT owner_id FROM rooms WHERE id=$1',[roomId])).rows[0];
+  if(!room||room.owner_id!==req.user.id)return res.sendStatus(403);
+  res.json((await pool.query("SELECT q.id,q.user_id,q.status,q.created_at,u.username FROM room_entry_requests q JOIN users u ON u.id=q.user_id WHERE q.room_id=$1 AND q.status='pending' ORDER BY q.created_at ASC LIMIT 100",[roomId])).rows);
+ }catch(e){fail(res,e)}
+});
+app.post('/api/rooms/:id/requests/:requestId',auth,async(req,res)=>{
+ const roomId=Number(req.params.id),requestId=Number(req.params.requestId),decision=req.body.decision;
+ if(!validId(roomId)||!validId(requestId)||!['approved','denied'].includes(decision))return res.status(400).json({error:'Invalid decision'});
+ try{
+  const room=(await pool.query('SELECT owner_id,is_public FROM rooms WHERE id=$1',[roomId])).rows[0];
+  if(!room||room.owner_id!==req.user.id)return res.sendStatus(403);
+  if(room.is_public)return res.status(400).json({error:'Room is already open'});
+  const row=(await pool.query("UPDATE room_entry_requests SET status=$1,decided_at=now() WHERE id=$2 AND room_id=$3 AND status='pending' RETURNING user_id",[decision,requestId,roomId])).rows[0];
+  if(!row)return res.status(404).json({error:'Request no longer pending'});
+  for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===row.user_id)socket.emit('room:entry-decision',{roomId,status:decision});
+  res.json({ok:true,status:decision});
+ }catch(e){fail(res,e)}
+});
+// Historical room chat is staff-only, paginated, searchable, and bounded.
+app.get('/api/mod/chatlogs',auth,staffGuard,async(req,res)=>{
+ try{
+  const roomId=req.query.roomId?Number(req.query.roomId):null,userId=req.query.userId?Number(req.query.userId):null;
+  const before=req.query.before?Number(req.query.before):null,q=safe(req.query.q,80);
+  if((roomId!==null&&!validId(roomId))||(userId!==null&&!validId(userId))||(before!==null&&!validId(before)))return res.status(400).json({error:'Invalid filter'});
+  const limit=Math.min(100,Math.max(1,Number(req.query.limit)||50));
+  const rows=(await pool.query(`SELECT m.id,m.body,m.created_at,m.room_id,m.user_id,COALESCE(u.username,'Deleted user') AS username,COALESCE(r.name,'Deleted room') AS room_name
+   FROM messages m LEFT JOIN users u ON u.id=m.user_id LEFT JOIN rooms r ON r.id=m.room_id
+   WHERE ($1::integer IS NULL OR m.room_id=$1) AND ($2::integer IS NULL OR m.user_id=$2)
+   AND ($3::bigint IS NULL OR m.id<$3) AND ($4::text='' OR m.body ILIKE '%'||$4||'%')
+   ORDER BY m.id DESC LIMIT $5`,[roomId,userId,before,q,limit])).rows;
+  res.json({messages:rows,nextBefore:rows.length===limit?rows[rows.length-1].id:null});
  }catch(e){fail(res,e)}
 });
 app.get('/api/catalog',auth,(_req,res)=>res.json(CATALOG));
@@ -261,13 +314,13 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    if(owner!==s.data.user.id)return ack({error:'Only the room owner can kick guests'});
    if(target.data.user.id===owner)return ack({error:'Cannot kick the room owner'});
    const key=roomId+':'+target.data.user.id;
-   roomKickTimeouts.set(key,Date.now()+10*60*1000);
+   roomKickTimeouts.set(key,Date.now()+10*60*1000);await pool.query("DELETE FROM room_entry_requests WHERE room_id=$1 AND user_id=$2",[roomId,target.data.user.id]);
    if(tradeBySocket.has(target.id))endTrade(liveTrades.get(tradeBySocket.get(target.id)),'Trade cancelled: guest was removed');
    leave(target);target.emit('room:kicked',{reason:'The room owner removed you. You cannot rejoin for 10 minutes.'});
    ack({ok:true}); 
   }catch(e){console.error(e);ack({error:'Could not remove guest'})}
  });
- s.on('room:join',async(id,ack=()=>{})=>{try{if(tradeBySocket.has(s.id))endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled: player changed rooms');id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query('SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2)',[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room is locked or unavailable'});const kickKey=id+':'+s.data.user.id;const blockedUntil=roomKickTimeouts.get(kickKey)||0;if(blockedUntil>Date.now()&&r.rows[0].owner_id!==s.data.user.id)return ack({error:'The room owner removed you. Try again in '+Math.ceil((blockedUntil-Date.now())/60000)+' minutes.'});if(blockedUntil&&blockedUntil<=Date.now())roomKickTimeouts.delete(kickKey);leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
+ s.on('room:join',async(id,ack=()=>{})=>{try{if(tradeBySocket.has(s.id))endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled: player changed rooms');id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query("SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2 OR EXISTS(SELECT 1 FROM room_entry_requests q WHERE q.room_id=rooms.id AND q.user_id=$2 AND q.status='approved'))",[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room is locked or unavailable'});const kickKey=id+':'+s.data.user.id;const blockedUntil=roomKickTimeouts.get(kickKey)||0;if(blockedUntil>Date.now()&&r.rows[0].owner_id!==s.data.user.id)return ack({error:'The room owner removed you. Try again in '+Math.ceil((blockedUntil-Date.now())/60000)+' minutes.'});if(blockedUntil&&blockedUntil<=Date.now())roomKickTimeouts.delete(kickKey);leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);positions.set(s.id,{x:4,y:4});poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:4,y:4});}catch(e){console.error(e);ack({error:'Join failed'});}});
  // Server-authoritative tile walking: one adjacent tile every 240 ms.
  // A new click cancels the previous route; players cannot teleport by sending coordinates.
  let walkTimer=null;
