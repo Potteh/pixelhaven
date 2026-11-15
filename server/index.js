@@ -108,7 +108,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  s.on('player:sit',async(itemId,ack=()=>{})=>{
    const roomId=s.data.roomId;if(!roomId)return ack({error:'Join a room first'});
    const item=(await pool.query("SELECT id,kind,x,y FROM furniture WHERE id=$1 AND room_id=$2",[Number(itemId),roomId])).rows[0];
-   if(!item||!['chair','sofa','bed'].includes(item.kind))return ack({error:'Not a seat'});
+   if(!item||!['chair','sofa','bed','club_sofa','royal_throne','christmas_sofa'].includes(item.kind))return ack({error:'Not a seat'});
    if([...poses.entries()].some(([sid,pose])=>sid!==s.id&&pose?.seatId===item.id))return ack({error:'Seat occupied'});
    stopWalking();
    positions.set(s.id,{x:item.x,y:item.y});
