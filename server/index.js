@@ -136,7 +136,7 @@ app.post('/api/mod/action',auth,staffGuard,async(req,res)=>{const id=Number(req.
  for(const socket of io.sockets.sockets.values())if(socket.data.user?.id===id){
  if(action==='ban')socket.disconnect(true);
  else if(action==='warn')socket.emit('moderation:warning',{reason});
- else if(action==='credits'||action==='role'){socket.data.user=await getUser(id);socket.emit('account:changed',{action});if(action==='role'&&socket.data.roomId)io.to('room:'+socket.data.roomId).emit('player:identity',{socketId:socket.id,user:displayUser(socket.data.user)})}
+ else if(action==='credits'||action==='role'){socket.data.user=await getUser(id);socket.emit('account:changed',{action,coins:socket.data.user.coins});if(action==='role'&&socket.data.roomId)io.to('room:'+socket.data.roomId).emit('player:identity',{socketId:socket.id,user:displayUser(socket.data.user)})}
  }
  res.json({ok:true,coins:action==='credits'?(await getUser(id)).coins:undefined});
  }catch(e){await client.query('ROLLBACK');res.status(400).json({error:e.message})}finally{client.release()}});
