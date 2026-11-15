@@ -82,10 +82,33 @@
     ctx.fillStyle='#fff';ctx.fillText(name,x,y-110);
     const bubble=chatBubbles.get(p.socketId);
     if(bubble&&bubble.until>Date.now()){
-      const msg=String(bubble.text).slice(0,40);ctx.font='13px system-ui';
-      const w=Math.min(300,ctx.measureText(msg).width+24);
-      ctx.fillStyle='#fff';ctx.fillRect(x-w/2,y-165,w,30);
-      ctx.fillStyle='#26334b';ctx.fillText(msg,x,y-145);
+      const message=String(bubble.text||'').replace(/\\s+/g,' ').trim();
+      if(message){
+        ctx.save();
+        ctx.font='13px system-ui';ctx.textAlign='center';
+        const maxWidth=190,words=message.split(' '),lines=[];let current='';
+        for(const word of words){
+          const candidate=current?current+' '+word:word;
+          if(ctx.measureText(candidate).width>maxWidth&&current){lines.push(current);current=word;}
+          else current=candidate;
+        }
+        if(current)lines.push(current);
+        // Wrap long unbroken strings safely.
+        const wrapped=[];
+        for(const line of lines){
+          let part='';
+          for(const ch of line){if(ctx.measureText(part+ch).width>maxWidth&&part){wrapped.push(part);part='';}part+=ch;}
+          if(part)wrapped.push(part);
+        }
+        const visible=wrapped.slice(0,5),width=Math.min(220,Math.max(58,...visible.map(t=>ctx.measureText(t).width+22)));
+        const height=visible.length*17+16,top=y-144-height;
+        ctx.fillStyle='#f9f8f4';ctx.strokeStyle='#4b3b52';ctx.lineWidth=2;
+        ctx.beginPath();ctx.roundRect(x-width/2,top,width,height,8);ctx.fill();ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x-7,top+height);ctx.lineTo(x,top+height+9);ctx.lineTo(x+7,top+height);ctx.fill();ctx.stroke();
+        ctx.fillStyle='#25273d';
+        visible.forEach((t,i)=>ctx.fillText(t,x,top+19+i*17));
+        ctx.restore();
+      }
     }
   };
   // Remove old interpolation entries after room transitions and disconnects.
