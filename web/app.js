@@ -241,7 +241,8 @@ async function renderCatalog(){
    const item=document.createElement('article');item.className='catalogCard';
    const picture=document.createElement('div');picture.className='catalogPicture';
    const preview=document.createElement('canvas');preview.width=128;preview.height=128;picture.append(preview);
-   window.drawFurniturePreview?.(preview,entry.kind);
+   if(window.drawFurniturePreview)window.drawFurniturePreview(preview,entry.kind);
+   else{const pc=preview.getContext('2d');pc.font='56px sans-serif';pc.textAlign='center';pc.textBaseline='middle';pc.fillText(emoji[entry.kind]||'🪑',64,64)}
    const name=document.createElement('strong');name.textContent=(emoji[entry.kind]||'🪑')+' '+entry.name;
    const rarityLabel=document.createElement('span');rarityLabel.className='catalogRarity rarity-'+entry.rarity;rarityLabel.textContent=entry.rarity.toUpperCase();
    const description=document.createElement('small');description.textContent=entry.description;
