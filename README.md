@@ -61,6 +61,15 @@ The game window has shortcuts for Rooms, Shop, Bag, Looks, Trade, Report, and St
 
 **Important:** Keep a database backup before deploying, especially before enabling trading. Run only one application replica. Verify permission boundaries, concurrent trades, and account recovery in staging before opening the system to the public.
 
+### Multiple game profiles and live trades
+
+- **👥 Profiles:** Create up to five named in-game identities under one login and switch between them. Profiles have their own avatar appearance. Coins, furniture inventory, bans, and staff permissions belong to the underlying account.
+- **MOD- nameplate:** Moderators display a bold gold `MOD-` prefix before their selected profile name in rooms. The prefix is assigned by the server-side staff role, not by the player's chosen name.
+- **🔄 Live Trade:** Invite a player in the same room, add furniture and/or currency tokens to both offers, then each participant locks their offer and separately confirms. Once both confirm, the server validates inventory and transfers items atomically.
+- The previous asynchronous trade offers remain available from **🤝 Trade**. Players can redeem currency tokens from their inventory.
+
+Trade invitations are cancelled if a player disconnects or changes rooms. The live trade state is in memory; restarting the app cancels unfinished live trades. Test with two separate accounts before enabling trades publicly.
+
 ### Operations
 
 ```bash
