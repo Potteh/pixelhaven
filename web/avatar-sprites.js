@@ -15,59 +15,91 @@
     const ch=k=>Math.max(0,Math.min(255,((n>>k)&255)+amount)).toString(16).padStart(2,'0');
     return '#'+ch(16)+ch(8)+ch(0);
   }
-  function makeSprite(avatar, dir, frame) {
-    const skin=rgb(avatar.skin,'#e8ad7d'), shirt=rgb(avatar.shirt,'#4b86e8'), hair=rgb(avatar.hair,'#493323');
+  // Original hotel-pixel proportions: broad expressive head, compact torso,
+  // outlined clothing and shoes, directional hair and four walk poses.
+  function makeSprite(avatar,dir,frame){
+    const skin=rgb(avatar.skin,'#e8ad7d'),shirt=rgb(avatar.shirt,'#4b86e8'),hair=rgb(avatar.hair,'#493323');
     const key=[skin,shirt,hair,dir,frame].join(':');
-    if(atlas.has(key)) return atlas.get(key);
-    const c=document.createElement('canvas');c.width=34;c.height=53;
+    if(atlas.has(key))return atlas.get(key);
+    const c=document.createElement('canvas');c.width=40;c.height=56;
     const g=c.getContext('2d');g.imageSmoothingEnabled=false;
-    const block=(x,y,w,h,color)=>{g.fillStyle=color;g.fillRect(Math.round(x),Math.round(y),w,h)};
-    const back=dir==='back'||dir.startsWith('back-'), side=dir==='left'||dir==='right', diagonal=dir.includes('-'), flip=dir==='left'||dir.endsWith('-left');
-    g.save();if(flip){g.translate(34,0);g.scale(-1,1)}
-    // Four distinct walk poses: planted feet, crossing stride, and head counter-sway.
-    const walking=frame!==0,phase=frame===1?1:frame===2?0:frame===3?-1:0;
-    const lift=walking&&(frame===1||frame===3)?1:0;
-    const headShift=phase===1?-1:phase===-1?1:0;
-    const bodyShift=phase===1?1:phase===-1?-1:0;
-    const leftStride=phase*4,rightStride=-phase*4;
-    // Far leg first, then near leg: stepping actually changes the silhouette.
-    block(19+rightStride,37+Math.max(0,phase)*2,7,13,palette.outline);
-    block(20+rightStride,38+Math.max(0,phase)*2,5,10,palette.jeans);
-    block(19+rightStride,48+Math.max(0,phase)*2,9,4,palette.shoes);
-    block(20+rightStride,49+Math.max(0,phase)*2,5,1,'#e5e5ed');
-    block(9+leftStride,37+Math.max(0,-phase)*2,7,13,palette.outline);
-    block(10+leftStride,38+Math.max(0,-phase)*2,5,10,palette.jeans);
-    block(8+leftStride,48+Math.max(0,-phase)*2,10,4,palette.shoes);
-    block(9+leftStride,49+Math.max(0,-phase)*2,6,1,'#e5e5ed');
-    // Opposing arm swing, subtle torso bob and shoulder rotation.
-    const bob=walking?(frame===2?1:-lift):0;
-    block(8+bodyShift,23+bob,19,18,palette.outline);
-    block(9+bodyShift,24+bob,17,16,shirt);
-    block(9+bodyShift,24+bob,3,15,tint(shirt,-30));
-    block(22+bodyShift,24+bob,3,15,tint(shirt,-24));
-    const leftArm=-phase*3,rightArm=phase*3;
-    block(5+leftArm,26+bob+Math.max(0,phase),5,13,palette.outline);
-    block(6+leftArm,27+bob+Math.max(0,phase),3,10,shirt);
-    block(26+rightArm,26+bob+Math.max(0,-phase),5,13,palette.outline);
-    block(27+rightArm,27+bob+Math.max(0,-phase),3,10,shirt);
-    block(6+leftArm,36+bob+Math.max(0,phase),3,3,skin);
-    block(27+rightArm,36+bob+Math.max(0,-phase),3,3,skin);
-    if(!back){block(16+bodyShift,25+bob,2,13,tint(shirt,55));block(15+bodyShift,24+bob,4,3,'#f3eee4')}else if(diagonal){block(23+bodyShift,25+bob,2,12,tint(shirt,-48));}
-    // Head moves independently of the torso; hair and face follow the tilt.
-    g.save();g.translate(headShift,bob+(walking&&frame===2?1:0));
-    block(14,20,8,6,palette.outline);block(15,20,6,5,skin);
-    block(side?11:diagonal?10:9,6,side?16:diagonal?17:18,18,palette.outline);
-    block(side?12:diagonal?11:10,7,side?14:diagonal?15:16,16,skin);
-    block(side?13:diagonal?12:11,18,side?12:diagonal?13:14,4,tint(skin,-16));
-    block(9,4,19,9,palette.outline);block(10,3,17,8,hair);
-    block(12,2,12,3,tint(hair,20));block(8,8,5,8,hair);
-    block(24,7,4,8,hair);block(11,5,6,2,tint(hair,33));
-    if(back){block(11,12,15,9,hair);block(13,20,11,2,tint(hair,-20));if(diagonal){block(23,15,2,5,tint(skin,-20));block(24,13,2,2,hair)}}
-    else if(side){block(21,14,2,2,palette.eye);block(24,19,2,1,palette.mouth)}
-    else if(diagonal){block(17,15,2,2,palette.eye);block(24,15,2,2,palette.eye);block(21,20,3,1,palette.mouth);block(10,11,3,11,tint(hair,-15))}
-    else {block(13,15,2,2,palette.eye);block(22,15,2,2,palette.eye);block(17,20,4,1,palette.mouth)}
-    g.restore();
-    g.restore();
+    const rect=(x,y,w,h,col)=>{g.fillStyle=col;g.fillRect(Math.round(x),Math.round(y),w,h)};
+    const back=dir==='back'||dir.startsWith('back-'),side=dir==='left'||dir==='right';
+    const diag=dir.includes('-'),flip=dir==='left'||dir.endsWith('-left');
+    const phase=frame===1?1:frame===3?-1:0,bob=frame===2?1:frame? -1:0;
+    const edge='#292637',pants='#354969',pantLight='#526783',shoe='#252335';
+    g.save();if(flip){g.translate(40,0);g.scale(-1,1)}
+    // Two independently animated, thick legs and oversized sneakers.
+    for(const [x,step,far] of [[12,phase*3,false],[23,-phase*3,true]]){
+      const yy=38+(step>0?2:0);
+      rect(x+step,yy,7,12,edge);rect(x+step+1,yy+1,5,10,pants);
+      rect(x+step+1,yy+1,2,8,pantLight);
+      rect(x+step-2,yy+10,11,5,edge);rect(x+step-1,yy+11,10,3,shoe);
+      rect(x+step-1,yy+13,10,1,'#ddd8ce');
+    }
+    // Layered shirt with chunky cuffs, hem, neckline and shaded sides.
+    const torso=phase===1?1:phase===-1?-1:0;
+    rect(10+torso,24+bob,22,18,edge);
+    rect(11+torso,25+bob,20,15,shirt);
+    rect(11+torso,25+bob,4,15,tint(shirt,-35));
+    rect(27+torso,25+bob,3,15,tint(shirt,-22));
+    rect(14+torso,39+bob,14,2,tint(shirt,-40));
+    for(const [x,step] of [[5,-phase*2],[31,phase*2]]){
+      rect(x+step,26+bob,6,13,edge);
+      rect(x+step+1,27+bob,4,9,shirt);
+      rect(x+step+1,36+bob,4,4,skin);
+      rect(x+step+1,38+bob,4,2,tint(skin,-22));
+    }
+    if(!back){
+      rect(18+torso,25+bob,6,3,'#f4eee0');
+      rect(19+torso,28+bob,3,10,tint(shirt,30));
+      rect(13+torso,32+bob,2,5,tint(shirt,-48));
+    }else{
+      rect(19+torso,26+bob,2,12,tint(shirt,-27));
+    }
+    // Wide pixel face with visible jaw and ears; head sways against torso.
+    g.save();g.translate(-phase,bob);
+    const hx=diag?10:side?12:9,hw=diag?22:side?19:24;
+    rect(hx,7,hw,19,edge);
+    rect(hx+1,8,hw-2,16,skin);
+    rect(hx+2,22,hw-4,4,tint(skin,-20));
+    rect(hx+5,25,hw-10,2,edge);
+    if(!back){
+      rect(hx-2,16,3,7,edge);rect(hx-1,17,2,5,skin);
+      rect(hx+hw-1,16,3,7,edge);rect(hx+hw,17,2,5,tint(skin,-18));
+      rect(hx+3,11,hw-6,3,tint(skin,10));
+      if(side){
+        rect(25,15,3,3,edge);rect(26,15,1,1,'#fff');
+        rect(29,20,3,2,tint(skin,-42));rect(27,23,3,1,'#8c5054');
+      }else if(diag){
+        rect(19,15,3,3,edge);rect(20,15,1,1,'#fff');
+        rect(28,15,2,3,edge);
+        rect(25,21,3,2,tint(skin,-35));rect(23,24,4,1,'#98585c');
+      }else{
+        rect(15,15,3,3,edge);rect(16,15,1,1,'#fff');
+        rect(26,15,3,3,edge);rect(27,15,1,1,'#fff');
+        rect(21,19,3,2,tint(skin,-32));
+        rect(19,23,7,2,'#a65f61');
+      }
+    }
+    // Distinct thick hairline, sideburns and highlights in all views.
+    rect(hx-1,5,hw+2,8,edge);
+    rect(hx,4,hw,8,hair);
+    rect(hx+3,2,hw-6,5,hair);
+    rect(hx+6,2,Math.max(5,hw-12),2,tint(hair,28));
+    rect(hx,10,4,8,hair);
+    rect(hx+hw-4,9,4,7,tint(hair,-17));
+    if(back){
+      rect(hx+1,11,hw-2,13,hair);
+      rect(hx+4,20,hw-8,4,tint(hair,-22));
+      rect(hx+4,7,hw-8,2,tint(hair,18));
+      if(diag){rect(hx+hw-3,15,3,8,tint(skin,-15))}
+    }else{
+      rect(hx+3,10,7,3,hair);
+      rect(hx+hw-9,10,7,2,hair);
+      if(side||diag)rect(hx+1,12,3,10,tint(hair,-14));
+    }
+    g.restore();g.restore();
     atlas.set(key,c);if(atlas.size>512)atlas.clear();
     return c;
   }
@@ -99,7 +131,7 @@
     if(seated){
       // Upper body remains upright while knees fold forward on the seat.
       const skin=rgb(p.user.avatar?.skin,'#e8ad7d');
-      ctx.drawImage(sprite,0,0,34,39,Math.round(x-34),Math.round(y-92),68,78);
+      ctx.drawImage(sprite,0,0,40,40,Math.round(x-40),Math.round(y-96),80,80);
       ctx.fillStyle='#304665';ctx.fillRect(x-19,y-18,18,9);ctx.fillRect(x+1,y-18,18,9);
       ctx.fillStyle='#171c30';ctx.fillRect(x-21,y-10,19,7);ctx.fillRect(x+1,y-10,19,7);
     }else{
@@ -107,7 +139,7 @@
       const bounce=emote==='cheer'?Math.abs(Math.sin(now/110))*7:emote==='dance'?Math.abs(Math.sin(now/145))*5:0;
       const sway=emote==='dance'?Math.sin(now/170)*8:emote==='laugh'?Math.sin(now/95)*2:0;
       ctx.translate(x,y-bounce);ctx.rotate(sway*Math.PI/180);
-      ctx.drawImage(sprite,-34,-104,68,106);
+      ctx.drawImage(sprite,-40,-112,80,112);
       if(emote==='wave'||emote==='cheer'){
         const lift=emote==='wave'?Math.sin(now/125)*6:0;
         ctx.fillStyle=rgb(p.user.avatar?.shirt,'#4b86e8');ctx.fillRect(24,-94+lift,9,31);
@@ -126,5 +158,5 @@
   window.pixelAvatarPosition=id=>{const m=motion.get(id);return m?tile(m.x,m.y):null;};
   // Remove old interpolation entries after room transitions and disconnects.
   setInterval(()=>{if(typeof players==='undefined')return;for(const id of motion.keys())if(!players.has(id))motion.delete(id)},10000);
-  console.info('[Pixel Haven] v5.0 seated poses and multiplayer emotes loaded');
+  console.info('[Pixel Haven] v5.1 detailed hotel-style avatar sprites loaded');
 })();
