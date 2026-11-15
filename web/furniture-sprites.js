@@ -26,7 +26,7 @@ function sprite(kind) {
    iso(0,-18,34,8,27,'#c96272','#7b3c57','#a74b64');
    iso(-27,-8,8,11,21,'#eaa18a','#985062','#b9636a');
    iso(27,-8,8,11,21,'#eaa18a','#985062','#b9636a');
-   for(const x of [-15,13]){iso(x,-12,14,9,5,'#efad9a','#ad596e','#d17883');rect(x-4,-36,7,2,'#f9c2a7')}
+   for(const x of [-15,13]){iso(x,-12,14,9,5,'#efad9a','#ad596e','#d17883');rect(x-4,-36,7,2,'#f9c2a7');rect(x-8,-30,15,2,'#ffe0ce55');rect(x+6,-25,2,6,'#6c3d50')}
    for(const x of [-26,26]){rect(x,-3,5,6,'#624355');rect(x+1,0,3,3,'#d7b26b')}
    rect(-23,-52,12,2,'#e9a4a1');rect(10,-52,12,2,'#e9a4a1');
    break;
@@ -35,24 +35,24 @@ function sprite(kind) {
    iso(0,-18,19,7,30,'#b96c80','#713c5c','#97516d');
    iso(-17,-9,6,8,17,'#e6a485','#985f6a','#c37b79');
    iso(17,-9,6,8,17,'#e6a485','#985f6a','#c37b79');
-   rect(-13,-45,7,2,'#e9a0a3');rect(-12,-5,4,8,'#49364a');rect(9,-5,4,8,'#49364a');
+   rect(-13,-45,7,2,'#e9a0a3');rect(-9,-38,17,3,'#e8a8ae');rect(-8,-34,2,9,'#82445f');rect(-12,-5,4,8,'#49364a');rect(9,-5,4,8,'#49364a');
    break;
  case 'table':
    for(const x of [-21,18]){rect(x,-14,6,20,'#745344');rect(x+2,-12,2,15,'#b78c66')}
    iso(0,-22,31,17,8,'#f3d5a0','#886049','#b98c63');
    poly([[-22,-43],[0,-55],[23,-43],[0,-31]],'#f9e6bd','#dfba7e');
-   rect(-13,-41,8,2,'#ffffff88');rect(9,-40,5,2,'#ffffff88');
+   rect(-13,-41,8,2,'#ffffff88');rect(-5,-39,12,2,'#bba18466');rect(9,-40,5,2,'#ffffff88');
    break;
  case 'bed':
    iso(0,-2,37,23,16,'#b4d6df','#6a7f9e','#8ca8c1');
    iso(0,-15,37,23,7,'#f3e5d6','#9b8ba2','#c5b2ba');
    iso(-12,-27,17,10,6,'#ffffff','#b5beca','#e5ebef');
    iso(13,-21,17,11,4,'#8fc3d8','#517fa5','#6fa4c3');
-   rect(-30,-4,6,8,'#7b5264');rect(25,-4,6,8,'#7b5264');
+   rect(-18,-35,18,3,'#ffffffcc');rect(2,-27,18,2,'#b9d7e4');rect(-30,-4,6,8,'#7b5264');rect(25,-4,6,8,'#7b5264');
    break;
  case 'plant':
    iso(0,-3,16,12,23,'#e8b47b','#93604d','#c38b5d');
-   rect(-11,-21,4,8,'#fff1b455');rect(5,-14,5,3,'#694e42');
+   rect(-11,-21,4,8,'#fff1b455');rect(-6,-13,13,2,'#ffdfad88');rect(5,-14,5,3,'#694e42');
    for(const [x,y] of [[-26,-44],[-15,-57],[0,-64],[17,-58],[26,-44],[-18,-34],[18,-34]]){
      stem(0,-25,x,y);leaf(x,y,x%2?'#4fa36e':'#78c783');
    }
@@ -62,7 +62,7 @@ function sprite(kind) {
    rect(-2,-60,5,53,'#a77d57');rect(-1,-57,2,48,'#f2d59a');
    poly([[-19,-66],[19,-66],[13,-43],[-13,-43]],'#ffe4a1','#a47751');
    rect(-13,-62,25,3,'#fff4d1');rect(-10,-47,20,3,'#d5a15f');
-   sparkle(10,-73);break;
+   sparkle(10,-73);rect(-16,-64,30,2,'#fff6d6aa');break;
  case 'arcade':
    iso(0,-5,21,15,58,'#7169d5','#38345d','#5752a3');
    poly([[-16,-56],[16,-56],[16,-33],[-16,-33]],'#1b2946','#26223e');
@@ -70,7 +70,7 @@ function sprite(kind) {
    rect(-8,-48,7,5,'#72f3de');rect(3,-46,5,7,'#ffcf6e');
    poly([[-15,-30],[15,-30],[11,-22],[-11,-22]],'#efb46f','#4c3c6b');
    rect(-6,-28,4,3,'#e34f77');rect(5,-27,3,3,'#65e4e1');
-   rect(-12,-66,24,4,'#e8b76b');rect(-8,-12,4,3,'#171b34');rect(5,-12,4,3,'#171b34');
+   rect(-12,-66,24,4,'#e8b76b');rect(-9,-51,17,2,'#bdfaff88');rect(-11,-17,22,2,'#2e285c');rect(-8,-12,4,3,'#171b34');rect(5,-12,4,3,'#171b34');
    break;
  default:iso(0,-4,22,14,22,'#d9bb8c','#8a654e','#b48b61');
  }
@@ -84,5 +84,5 @@ window.drawFurniture=function(f){
  ctx.drawImage(art,Math.round(p.x-52),Math.round(p.y-91));
  ctx.restore();
 };
-console.info('[Pixel Haven] v4.2 pixel furniture atlas loaded');
+console.info('[Pixel Haven] v5.2 detailed pixel furniture atlas loaded');
 })();
