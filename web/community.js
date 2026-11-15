@@ -181,7 +181,19 @@ window.pixelShowPlayer=async player=>{
   try{const badges=await api('/users/'+player.id+'/badges');if(!badges.length)badgeBox.append(el('small','No badges yet'));for(const b of badges){const item=el('div');item.className='playerBadge';const img=el('img');img.src=b.image_path;img.alt=b.name;img.title=b.name+' ('+b.code+')';img.onerror=()=>{img.hidden=true;item.append(el('strong',b.code))};item.append(img,el('small',b.name));badgeBox.append(item)}}catch(e){badgeBox.append(el('small',e.message))}
 
   const controls=el('div');controls.className='communityActions';p.append(controls);
-  if(!self)controls.append(button('Find & Add Friend',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'request'});p.append(el('p','Friend request sent'))}catch(e){p.append(el('p',e.message))}}));
+  if(!self){
+   try{
+    const friends=await api('/social/friends');
+    const relation=friends.find(f=>Number(f.id)===Number(player.id));
+    if(!relation){
+     controls.append(button('Send Friend Request',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'request'});await window.pixelShowPlayer(player)}catch(e){p.append(el('p',e.message))}}));
+    }else if(relation.status==='accepted'){
+     controls.append(el('span','✓ Friends'));
+    }else if(relation.direction==='incoming'){
+     controls.append(button('Accept Friend Request',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'accept'});await window.pixelShowPlayer(player)}catch(e){p.append(el('p',e.message))}}));
+    }else controls.append(el('span','⏳ Friend request pending'));
+   }catch(e){p.append(el('p',e.message))}
+  }
   if(!self){controls.append(button('Message / Friends',()=>select('social')));controls.append(button('Trade',()=>select('trade')))}
   body.prepend(p);
  }catch(e){console.warn(e)}
