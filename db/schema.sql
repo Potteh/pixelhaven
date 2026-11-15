@@ -66,3 +66,8 @@ CREATE TABLE IF NOT EXISTS social_reads (user_id INTEGER NOT NULL REFERENCES use
 CREATE TABLE IF NOT EXISTS badge_definitions (code VARCHAR(16) PRIMARY KEY, name VARCHAR(80) NOT NULL, image_path TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS user_badges (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code VARCHAR(16) NOT NULL REFERENCES badge_definitions(code) ON DELETE CASCADE, granted_by INTEGER REFERENCES users(id) ON DELETE SET NULL, granted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY(user_id,code));
 INSERT INTO badge_definitions(code,name,image_path) VALUES('ADM','Pixel Staff','/badges/ADM.gif') ON CONFLICT(code) DO NOTHING;
+
+-- Player Profiles 2.0: public motto, equipped badge showcase and earned achievements.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS motto VARCHAR(120) NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS profile_equipped_badges (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code VARCHAR(16) NOT NULL, position SMALLINT NOT NULL CHECK(position BETWEEN 1 AND 3), PRIMARY KEY(user_id,code), UNIQUE(user_id,position), FOREIGN KEY(user_id,code) REFERENCES user_badges(user_id,code) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS profile_achievements (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code VARCHAR(32) NOT NULL, earned_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY(user_id,code));
