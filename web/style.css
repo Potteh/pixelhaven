@@ -301,3 +301,11 @@ main{grid-template-columns:minmax(0,1fr) 300px;max-width:1800px}
 .achievementProgressRow{display:grid;gap:4px;padding:8px;border:1px solid #55648c;border-radius:8px}
 .achievementProgressRow small{opacity:.85}
 .achievementProgressRow progress{width:100%;height:12px;accent-color:#f6c75d}
+
+/* Furniture & Catalog 3.0 */
+.catalogControls{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+.catalogControls input,.catalogControls select{background:#242c49;color:#f4f4ff;border:1px solid #64749e;border-radius:8px;padding:9px;min-width:135px;flex:1}
+.catalogRarity{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#d1d5e9}
+.rarity-uncommon{color:#8ee2aa}.rarity-rare{color:#80c7ff}.rarity-epic{color:#d3a2ff}.rarity-legendary{color:#ffd270}
+.catalogCard small{display:block;line-height:1.35;color:#bfc8e1}
+.catalogCard button:disabled{opacity:.55;cursor:not-allowed}
