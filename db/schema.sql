@@ -61,3 +61,8 @@ CREATE TABLE IF NOT EXISTS social_message_reports (
 
 -- Social 2.1 read receipts per account and friend conversation.
 CREATE TABLE IF NOT EXISTS social_reads (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, last_read_id BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(user_id,friend_id));
+
+-- Account badges: codes are administrator-defined; grants are auditable.
+CREATE TABLE IF NOT EXISTS badge_definitions (code VARCHAR(16) PRIMARY KEY, name VARCHAR(80) NOT NULL, image_path TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS user_badges (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code VARCHAR(16) NOT NULL REFERENCES badge_definitions(code) ON DELETE CASCADE, granted_by INTEGER REFERENCES users(id) ON DELETE SET NULL, granted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY(user_id,code));
+INSERT INTO badge_definitions(code,name,image_path) VALUES('ADM','Pixel Staff','/badges/ADM.gif') ON CONFLICT(code) DO NOTHING;
