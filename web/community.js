@@ -25,6 +25,23 @@ async function trade(){const p=playerSearch('Trade with');const offer=itemRows('
  async function showTrades(){const trades=await api('/trades');list.replaceChildren(el('h4','Trade offers'));for(const t of trades){const row=el('article');row.className='communityCase';row.append(el('strong','#'+t.id+' · '+t.sender+' ↔ '+t.recipient+' · '+t.status));row.append(el('p','Offered: '+JSON.stringify(t.offered)+' | Requested: '+JSON.stringify(t.requested)));if(t.status==='pending'){const incoming=Number(t.recipient_id)===Number(user.id);for(const action of incoming?['accept','decline']:['cancel'])row.append(button(action,async()=>{try{await api('/trades/'+t.id+'/decision','POST',{decision:action});await showTrades()}catch(e){status(e.message)}}))}list.append(row)}}await showTrades()}
 
 let socialFriend=null,socialTimer=null;
+let previousIncoming=new Set(),notificationsReady=false;
+const socialBadge=document.createElement('span');socialBadge.className='socialBadge';socialBadge.hidden=true;
+const socialDock=document.querySelector('[data-game-action="social"]');socialDock?.append(socialBadge);
+async function refreshSocialBadge(){
+ if(!localStorage.getItem('pixel_token'))return;
+ const [unread,friends]=await Promise.all([api('/social/unread'),api('/social/friends')]);
+ const incoming=friends.filter(f=>f.status==='pending'&&f.direction==='incoming');
+ const total=unread.total+incoming.length;
+ socialBadge.hidden=!total;socialBadge.textContent=total>99?'99+':String(total);
+ if(notificationsReady){for(const f of incoming)if(!previousIncoming.has(String(f.id)))notifySocial('👥 Friend request from '+f.username)}
+ previousIncoming=new Set(incoming.map(f=>String(f.id)));notificationsReady=true;
+}
+function notifySocial(text){
+ const n=el('div',text);n.className='socialToast';n.setAttribute('role','status');document.body.append(n);
+ n.onclick=()=>{n.remove();open('social').catch(console.warn)};
+ setTimeout(()=>n.remove(),5500);
+}
 async function social(){
  const section=el('section');section.className='socialPanel';body.append(section);
  const notice=el('p');notice.className='communityStatus';section.append(el('h3','👥 Friends & Messages'),notice);
@@ -32,7 +49,7 @@ async function social(){
  const controls=el('div');controls.className='communityActions';section.append(controls);
  const roster=el('div');section.append(el('h4','Friends & Requests'),roster);
  const blockedList=el('div');section.append(el('h4','Blocked Players'),blockedList);
- const conversation=el('div');section.append(conversation);
+ const conversation=el('div');conversation.className='socialConversation';section.append(conversation);
  const feedback=e=>{notice.textContent=e?.message||String(e)};
  const run=async(fn)=>{try{await fn();await reload()}catch(e){feedback(e)}};
  controls.append(button('Send Friend Request',()=>run(async()=>{if(!p.select.value)throw Error('Select a player');await api('/social/friends/'+p.select.value,'POST',{action:'request'})})),button('Block Player',()=>run(async()=>{if(!p.select.value)throw Error('Select a player');if(!confirm('Block this player and remove your friendship?'))return;await api('/social/blocks/'+p.select.value,'POST',{action:'block'})})));
@@ -54,17 +71,17 @@ async function social(){
     if(Number(m.recipient_id)===Number(user.id))row.append(button('Report message',async()=>{const reason=prompt('Reason for reporting this private message (at least 5 characters)');if(reason===null)return;try{await api('/social/messages/'+m.id+'/report','POST',{reason});feedback('Message reported to hotel staff')}catch(err){feedback(err)}}));
     list.append(row);
    }
-   if(!data.messages.length)list.append(el('p','No messages yet.'));
+   if(!data.messages.length)list.append(el('p','No messages yet.'));await api('/social/messages/'+friend.id+'/read','POST');refreshSocialBadge().catch(()=>{});
    if(data.nextBefore)list.prepend(button('Older messages',async()=>{try{const old=await api('/social/messages/'+friend.id+'?before='+data.nextBefore);for(const m of old.messages){const row=el('article');row.className='communityCase';row.append(el('strong',Number(m.sender_id)===Number(user.id)?'You':friend.username),el('p',m.body));list.prepend(row)}}catch(err){feedback(err)}}));
   }catch(e){feedback(e)}
  }
  async function reload(){
-  const [friends,blocks]=await Promise.all([api('/social/friends'),api('/social/blocks')]);
+  const [friends,blocks,unread]=await Promise.all([api('/social/friends'),api('/social/blocks'),api('/social/unread')]);
   roster.replaceChildren();blockedList.replaceChildren();
   if(!friends.length)roster.append(el('p','No friends or pending requests yet.'));
   for(const f of friends){
    const row=el('article');row.className='communityCase';
-   row.append(el('strong',f.username+' · '+(f.status==='accepted'?(f.online?'🟢 Online':'⚫ Offline'):(f.direction==='incoming'?'Incoming request':'Request sent'))));
+   const count=unread.friends.find(x=>Number(x.friend_id)===Number(f.id))?.unread||0;row.append(el('strong',f.username+' · '+(f.status==='accepted'?(f.online?'🟢 Online':'⚫ Offline'):(f.direction==='incoming'?'Incoming request':'Request sent'))+(count?' · ✉️ '+count+' unread':'')));
    const actions=el('div');actions.className='communityActions';row.append(actions);
    const action=(label,value)=>actions.append(button(label,()=>run(()=>api('/social/friends/'+f.id,'POST',{action:value}))));
    if(f.status==='pending'){if(f.direction==='incoming'){action('Accept','accept');action('Decline','decline')}else action('Cancel request','remove')}
@@ -136,5 +153,22 @@ window.addEventListener('pixel:authenticated',()=>me().catch(e=>console.warn('St
 me().catch(()=>{});
 window.pixelCommunity={open};
 window.addEventListener('pixel:authenticated',()=>{if(!shell.hidden&&current==='social')select('social').catch(console.warn)});
-window.addEventListener('pixel:social-update',()=>{if(!shell.hidden&&current==='social')select('social').catch(console.warn)});
+window.addEventListener('pixel:social-update',()=>{refreshSocialBadge().catch(console.warn);if(!shell.hidden&&current==='social')select('social').catch(console.warn)});
+window.addEventListener('pixel:authenticated',()=>refreshSocialBadge().catch(console.warn));
+setInterval(()=>{if(localStorage.getItem('pixel_token'))refreshSocialBadge().catch(()=>{})},30000);
+window.pixelShowPlayer=async player=>{
+ try{
+  if(!user)await me();
+  if(Number(player.id)===Number(user.id))return;
+  await open('social');
+  const p=el('article');p.className='socialProfile communityCase';
+  p.append(el('h3','👤 '+player.username),el('p','Player profile · '+(player.role||'guest')));
+  const controls=el('div');controls.className='communityActions';p.append(controls);
+  controls.append(button('Find & Add Friend',async()=>{try{await api('/social/friends/'+player.id,'POST',{action:'request'});p.append(el('p','Friend request sent'))}catch(e){p.append(el('p',e.message))}}));
+  controls.append(button('Message / Friends',()=>select('social')));
+  controls.append(button('Trade',()=>select('trade')));
+  body.prepend(p);
+ }catch(e){console.warn(e)}
+};
+
 })();
