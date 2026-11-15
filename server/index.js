@@ -20,7 +20,7 @@ app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'12kb
 app.use('/api',rateLimit({windowMs:15*60*1000,limit:120,standardHeaders:'draft-7',legacyHeaders:false}));
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 app.use(express.static(root));
-const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25};
+const CATALOG={chair:35,sofa:95,table:65,plant:40,lamp:45,bed:120,arcade:160,club_sofa:240,royal_throne:450,ice_cream_machine:290,fridge:180,smoke_machine:195,christmas_tree:180,christmas_sofa:175,christmas_fireplace:220,snowman:90,gift_stack:55,candy_cane_lamp:75,festive_rug:65,gold_bar:1000,nickel:5,quarter:25};
 const safe=(s,max=240)=>String(s??'').trim().slice(0,max);
 const token=u=>jwt.sign({id:u.id},secret,{expiresIn:'7d'});
 const getUser=async id=>{const u=(await pool.query('SELECT id,username,coins,role,avatar,active_profile_id FROM users WHERE id=$1',[id])).rows[0];if(!u)return u;const p=u.active_profile_id?(await pool.query('SELECT id,name,avatar FROM game_profiles WHERE id=$1 AND user_id=$2',[u.active_profile_id,id])).rows[0]:null;u.profile=p||null;if(p?.avatar&&Object.keys(p.avatar).length)u.avatar=p.avatar;return u};
@@ -193,8 +193,8 @@ const transferLive=async t=>{
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 };
 const occupants=new Map();const positions=new Map();const poses=new Map();
-const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:displayUser(s.data.user),x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null}:null}).filter(Boolean);
-const leave=s=>{const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
+const occupantsFor=id=>[...(occupants.get(id)||new Set())].map(sid=>{const s=io.sockets.sockets.get(sid);return s?{socketId:sid,user:displayUser(s.data.user),x:positions.get(sid)?.x??4,y:positions.get(sid)?.y??4,pose:poses.get(sid)||null,held:s.data.held||null}:null}).filter(Boolean);
+const leave=s=>{s.data.held=null;const id=s.data.roomId;if(!id)return;occupants.get(id)?.delete(s.id);positions.delete(s.id);poses.delete(s.id);s.leave(`room:${id}`);io.to(`room:${id}`).emit('player:left',s.id);s.data.roomId=null;};
 io.use(async(socket,next)=>{try{const p=jwt.verify(socket.handshake.auth.token,secret);const u=await getUser(p.id);if(!u)return next(new Error('Unauthorized'));const b=await pool.query('SELECT 1 FROM bans WHERE user_id=$1 AND (expires_at IS NULL OR expires_at>now())',[u.id]);if(b.rowCount)return next(new Error('Suspended'));socket.data.user=u;next();}catch{next(new Error('Unauthorized'));}});
 io.on('connection',s=>{let lastChat=0,lastMove=0;
  s.on('liveTrade:invite',(targetId,ack=()=>{})=>{
@@ -304,6 +304,27 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  });
  s.on('chat:send',async(body,ack=()=>{})=>{try{const now=Date.now();if(now-lastChat<900)return ack({error:'Slow down'});lastChat=now;body=safe(body,240);if(!body||!s.data.roomId)return ack({error:'Cannot send'});await pool.query('INSERT INTO messages(room_id,user_id,body) VALUES($1,$2,$3)',[s.data.roomId,s.data.user.id,body]);io.to(`room:${s.data.roomId}`).emit('chat:message',{username:displayUser(s.data.user).username,userId:s.data.user.id,body,socketId:s.id});ack({ok:true});}catch(e){console.error(e);ack({error:'Chat failed'});}});
  s.on('furniture:place',async({kind,x,y}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3',[id,x,y]);if(occ.rowCount){await client.query('ROLLBACK');return ack({error:'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y) VALUES($1,$2,$3,$4,$5) RETURNING id,kind,x,y,rotation',[id,s.data.user.id,kind,x,y])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
+ // Interactive consumable dispensers: server chooses the item, never the browser.
+ s.on('furniture:dispense',async(itemId,ack=()=>{})=>{
+  const roomId=s.data.roomId,id=Number(itemId),now=Date.now();
+  if(!roomId||!Number.isSafeInteger(id)||id<1)return ack({error:'Invalid dispenser'});
+  if(now-(s.data.lastDispense||0)<1500)return ack({error:'Wait a moment before dispensing again'});
+  try{
+   const r=await pool.query('SELECT kind,x,y FROM furniture WHERE id=$1 AND room_id=$2',[id,roomId]);
+   if(!r.rowCount||!['ice_cream_machine','fridge'].includes(r.rows[0].kind))return ack({error:'This furniture cannot dispense food'});
+   const item=r.rows[0],pos=positions.get(s.id);
+   if(!pos||Math.abs(pos.x-item.x)+Math.abs(pos.y-item.y)>3)return ack({error:'Move closer to the dispenser'});
+   const choices=item.kind==='ice_cream_machine'?['icecream_vanilla','icecream_strawberry','icecream_chocolate']:['carrot','blackcurrant','icecream_vanilla','icecream_strawberry','icecream_chocolate'];
+   const held=choices[Math.floor(Math.random()*choices.length)];
+   s.data.lastDispense=now;s.data.held=held;
+   io.to('room:'+roomId).emit('player:held',{socketId:s.id,held});
+   ack({ok:true,held});
+  }catch(e){console.error(e);ack({error:'Dispenser unavailable'})}
+ });
+ s.on('player:dropHeld',(_,ack=()=>{})=>{
+  if(!s.data.roomId)return ack({error:'Join a room first'});
+  s.data.held=null;io.to('room:'+s.data.roomId).emit('player:held',{socketId:s.id,held:null});ack({ok:true});
+ });
  s.on('furniture:rotate',async(itemId,ack=()=>{})=>{try{
    const roomId=s.data.roomId,id=Number(itemId);
    if(!roomId||!Number.isSafeInteger(id)||id<1)return ack({error:'Invalid furniture'});
