@@ -615,7 +615,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
        if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
        const next=path[index];if(!next){stopWalking();return;}
        // Check every step against the live room state, not just the original route.
-       const occupied=await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId]);
+       const occupied=await pool.query('SELECT id,kind,x,y,rotation,stack_height,support_id FROM furniture WHERE room_id=$1',[roomId]);
        if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
        if(furnitureBlocked(occupied.rows).has(next.x+','+next.y)){stopWalking();return;}
        index++;
@@ -657,7 +657,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    const current=positions.get(s.id),pose=poses.get(s.id);
    if(!pose)return ack({ok:true});
    try{
-     const rows=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId])).rows;
+     const rows=(await pool.query('SELECT id,kind,x,y,rotation,stack_height,support_id FROM furniture WHERE room_id=$1',[roomId])).rows;
      const blocked=furnitureBlocked(rows);
      const origin=current||{x:4,y:4};
      const candidates=[];
@@ -680,7 +680,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    lastEmote=Date.now();io.to('room:'+s.data.roomId).emit('player:emote',{socketId:s.id,name,until:Date.now()+3500});ack({ok:true});
  });
  s.on('chat:send',async(body,ack=()=>{})=>{try{const now=Date.now();if(now-lastChat<900)return ack({error:'Slow down'});lastChat=now;body=safe(body,240);if(!body||!s.data.roomId)return ack({error:'Cannot send'});await pool.query('INSERT INTO messages(room_id,user_id,body) VALUES($1,$2,$3)',[s.data.roomId,s.data.user.id,body]);io.to(`room:${s.data.roomId}`).emit('chat:message',{username:displayUser(s.data.user).username,userId:s.data.user.id,body,socketId:s.id});ack({ok:true});}catch(e){console.error(e);ack({error:'Chat failed'});}});
- s.on('furniture:place',async({kind,x,y,supportId=null}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[id]);const support=supportId==null?null:validateStack({kind,x,y,rotation:0},occ.rows,supportId);if((supportId!=null&&!support)||(!supportId&&!validFurniturePlacement({kind,x,y,rotation:0},occ.rows))){await client.query('ROLLBACK');return ack({error:supportId?'Cannot stack that item here':'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y,stack_height,support_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,kind,x,y,rotation,stack_height,support_id',[id,s.data.user.id,kind,x,y,support?36:0,support?.id||null])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
+ s.on('furniture:place',async({kind,x,y,supportId=null}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT id,kind,x,y,rotation,stack_height,support_id FROM furniture WHERE room_id=$1',[id]);const support=supportId==null?null:validateStack({kind,x,y,rotation:0},occ.rows,supportId);if((supportId!=null&&!support)||(!supportId&&!validFurniturePlacement({kind,x,y,rotation:0},occ.rows))){await client.query('ROLLBACK');return ack({error:supportId?'Cannot stack that item here':'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y,stack_height,support_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,kind,x,y,rotation,stack_height,support_id',[id,s.data.user.id,kind,x,y,support?36:0,support?.id||null])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
  // Interactive consumable dispensers: server chooses the item, never the browser.
  s.on('furniture:dispense',async(itemId,ack=()=>{})=>{
   const roomId=s.data.roomId,id=Number(itemId),now=Date.now();
@@ -718,7 +718,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    if(!item.rowCount)throw Error('Furniture not found');
    if(item.rows[0].support_id)throw Error('Pick up stacked items before moving them');
    const children=await client.query('SELECT 1 FROM furniture WHERE support_id=$1 LIMIT 1',[itemId]);if(children.rowCount)throw Error('Remove stacked items before moving the table');
-   const occupied=await client.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId]);
+   const occupied=await client.query('SELECT id,kind,x,y,rotation,stack_height,support_id FROM furniture WHERE room_id=$1',[roomId]);
    if(!validFurniturePlacement({...item.rows[0],x,y},occupied.rows,itemId))throw Error('That tile is occupied');
    const result=await client.query('UPDATE furniture SET x=$1,y=$2 WHERE id=$3 RETURNING id,x,y',[x,y,itemId]);
    await client.query('COMMIT');
@@ -773,9 +773,9 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  s.on('furniture:rotate',async(itemId,ack=()=>{})=>{try{
    const roomId=s.data.roomId,id=Number(itemId);
    if(!roomId||!Number.isSafeInteger(id)||id<1)return ack({error:'Invalid furniture'});
-   const current=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3',[id,roomId,s.data.user.id])).rows[0];
+   const current=(await pool.query('SELECT id,kind,x,y,rotation,stack_height,support_id FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3',[id,roomId,s.data.user.id])).rows[0];
    if(!current)return ack({error:'Only the room owner can rotate this furniture'});
-   const all=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId])).rows;
+   const all=(await pool.query('SELECT id,kind,x,y,rotation,stack_height,support_id FROM furniture WHERE room_id=$1',[roomId])).rows;
    if(!validFurniturePlacement({...current,rotation:(current.rotation+1)%4},all,id))return ack({error:'Not enough free space to rotate'});
    const result=await pool.query('UPDATE furniture SET rotation=(rotation+1)%4 WHERE id=$1 AND room_id=$2 AND owner_id=$3 RETURNING id,rotation',[id,roomId,s.data.user.id]);
    if(!result.rowCount)return ack({error:'Only the room owner can rotate this furniture'});
