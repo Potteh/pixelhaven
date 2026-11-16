@@ -170,8 +170,8 @@ function drawAmbientFurniture(f){
  }
  ctx.restore();
 }
-function render(){ctx.clearRect(0,0,1000,660);drawRoom();const isLobby=room&&Number(room.id)===1;if(isLobby)lobbyDecor();const decorations=isLobby&&window.pixelLobbyObjects?window.pixelLobbyObjects:[];const entities=[...decorations.map(f=>({...f,type:'decor'})),...furniture.map(f=>({...f,type:'f'})),...players.values().map(p=>({...p,type:'player'}))].sort((a,b)=>((a.x+a.y)-(b.x+b.y))||((a.type==='player'?1:0)-(b.type==='player'?1:0)));for(const e of entities){if(e.type==='player'){drawAvatar(e);drawHeldFood(e)}else{window.pixelRoomFloorShadow?.(e);if(e.type==='decor')window.drawPixelLobbyObject(e);else{drawFurniture(e);drawAmbientFurniture(e);drawFurnitureEffect(e)}}}if(window.drawRoomChatBubbles)window.drawRoomChatBubbles();requestAnimationFrame(render)}requestAnimationFrame(render);
-let furnitureMoveMode=false;
+function render(){ctx.clearRect(0,0,1000,660);drawRoom();const isLobby=room&&Number(room.id)===1;if(isLobby)lobbyDecor();const decorations=isLobby&&window.pixelLobbyObjects?window.pixelLobbyObjects:[];const entities=[...decorations.map(f=>({...f,type:'decor'})),...furniture.map(f=>({...f,type:'f'})),...players.values().map(p=>({...p,type:'player'}))].sort((a,b)=>((a.x+a.y)-(b.x+b.y))||((Number(a.stack_height)||0)-(Number(b.stack_height)||0))||((a.type==='player'?1:0)-(b.type==='player'?1:0)));for(const e of entities){if(e.type==='player'){drawAvatar(e);drawHeldFood(e)}else{window.pixelRoomFloorShadow?.(e);if(e.type==='decor')window.drawPixelLobbyObject(e);else{if(e.stack_height){ctx.save();ctx.translate(0,-Number(e.stack_height));}drawFurniture(e);drawAmbientFurniture(e);drawFurnitureEffect(e);if(e.stack_height)ctx.restore();}}}if(window.drawRoomChatBubbles)window.drawRoomChatBubbles();requestAnimationFrame(render)}requestAnimationFrame(render);
+let furnitureMoveMode=false,stackPlacementMode=false;
 function clickTile(e){
  if(!room)return;
  const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*1000/r.width,py=(e.clientY-r.top)*660/r.height;
@@ -186,11 +186,16 @@ function clickTile(e){
  }
  const dx=(px-500)/43,dy=(py-118)/24,x=Math.floor((dx+dy)/2+.5),y=Math.floor((dy-dx)/2+.5);
  if(x<0||y<0||x>9||y>9)return;
- const item=furniture.find(f=>{
+ const item=[...furniture].reverse().find(f=>{
   const sizes={sofa:[2,1],club_sofa:[2,1],christmas_sofa:[2,1],bed:[2,2],table:[2,1],bookshelf:[2,1],aquarium:[2,1],christmas_fireplace:[2,1],golden_fountain:[2,2],vending_machine:[1,2],fridge:[1,2]};
   const [w,h]=sizes[f.kind]||[1,1],rot=((Number(f.rotation)||0)%4+4)%4;
   return x>=f.x&&y>=f.y&&x<f.x+(rot%2?h:w)&&y<f.y+(rot%2?w:h);
  });
+ if(stackPlacementMode&&selected){
+  const base=furniture.find(f=>f.kind==='table'&&!f.support_id&&x>=f.x&&y>=f.y&&x<f.x+((Number(f.rotation)||0)%2?1:2)&&y<f.y+((Number(f.rotation)||0)%2?2:1));
+  if(!base)return toast('Select a table tile to stack on');
+  socket.emit('furniture:place',{kind:selected,x,y,supportId:base.id},a=>{if(a?.error)toast(a.error);else{selected=null;stackPlacementMode=false;document.getElementById('furnitureStack')?.classList.remove('active');document.getElementById('placement').textContent='';loadInventory();toast('Furniture stacked')}});return;
+ }
  if(rotateMode){
   if(furnitureMoveMode&&rotationTarget){
    socket.emit('furniture:move',{itemId:rotationTarget,x,y},a=>{if(a?.error)toast(a.error);else{toast('Furniture moved');rotationTarget=null;furnitureMoveMode=false;updateRotateControls()}});return;
@@ -220,8 +225,9 @@ function updateRotateControls(){
  if(button)button.disabled=!rotateMode||!rotationTarget||!socket?.connected;
  const move=document.getElementById('furnitureMove'),pickup=document.getElementById('furniturePickup');if(move){move.disabled=!rotateMode||!rotationTarget;move.classList.toggle('active',furnitureMoveMode)}if(pickup)pickup.disabled=!rotateMode||!rotationTarget;if(toggle){toggle.classList.toggle('active',rotateMode);toggle.setAttribute('aria-pressed',String(rotateMode));toggle.textContent=rotateMode?'✓ Editing furniture':'✥ Edit furniture'}
 }
+document.getElementById('furnitureStack')?.addEventListener('click',()=>{stackPlacementMode=!stackPlacementMode;if(stackPlacementMode){rotateMode=false;furnitureMoveMode=false;rotationTarget=null;updateRotateControls();}document.getElementById('furnitureStack').classList.toggle('active',stackPlacementMode);toast(stackPlacementMode?'Select a small item from Bag, then click a table tile':'Stacking mode off')});
 document.getElementById('furnitureEdit')?.addEventListener('click',()=>{
- rotateMode=!rotateMode;furnitureMoveMode=false;rotationTarget=null;if(rotateMode)selected=null;
+ rotateMode=!rotateMode;stackPlacementMode=false;document.getElementById('furnitureStack')?.classList.remove('active');furnitureMoveMode=false;rotationTarget=null;if(rotateMode)selected=null;
  updateRotateControls();toast(rotateMode?'Click furniture, then press Rotate':'Furniture editing closed');
 });
 document.getElementById('furnitureRotate')?.addEventListener('click',()=>{
