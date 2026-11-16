@@ -322,3 +322,14 @@ main{grid-template-columns:minmax(0,1fr) 300px;max-width:1800px}
  .canvasWrap>canvas#game{width:auto;height:auto;max-width:100%;max-height:100%;aspect-ratio:1000/660;object-fit:contain;}
 }
 @media (max-width:700px){body{min-height:100vh;min-height:100dvh;}}
+
+/* Advanced Room Editor — integrated shortcut, responsive design panel */
+.pixelEditorOverlay{position:fixed;inset:0;z-index:13000;background:#071020c9;display:grid;place-items:center;padding:16px}
+.pixelEditorPanel{width:min(430px,100%);max-height:min(90dvh,800px);overflow:auto;display:grid;gap:12px;background:linear-gradient(150deg,#293c5a,#131f35);border:2px solid #d5ac70;border-radius:16px;padding:22px;box-shadow:0 20px 60px #000a;color:#f6e9cf}
+.pixelEditorPanel h3{margin:0;font-size:22px}
+.pixelEditorPanel p{margin:0;color:#cbd5e5;font-size:13px}
+.pixelEditorPanel label{display:grid;gap:5px;font-size:13px;font-weight:700}
+.pixelEditorPanel input[type=color]{height:40px;padding:3px;cursor:pointer}
+.pixelEditorPanel select{width:100%}
+.pixelEditorActions{display:flex;gap:9px;justify-content:flex-end}
+.pixelEditorActions button{flex:1}
