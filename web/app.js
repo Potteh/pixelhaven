@@ -239,6 +239,39 @@ function updateGuests(){
  const settings=document.getElementById('roomSettingsOpen');if(settings)settings.hidden=!owner;
 }
 function join(id){if(!socket?.connected)return toast('Not connected to the hotel');socket.emit('room:join',id,data=>{if(data.error)return toast(data.error);room=data.room;rotationTarget=null;updateRotateControls();$('#roomTitle').textContent='🏨 '+room.name;furniture=data.furniture;furnitureLights.clear();for(const light of data.lights||[])furnitureLights.set(light.id,light.enabled);players=new Map(data.players.map(p=>[p.socketId,p]));chatBubbles.clear();const drop=document.getElementById('dropHeldFood');if(drop)drop.hidden=true;updateGuests()})}
+
+function openAdvancedRoomEditor(){
+ if(!room)return toast('Join a room first');
+ if(Number(room.owner_id)!==Number(me?.id))return toast('Only the room owner can edit this room');
+ document.getElementById('pixelAdvancedEditor')?.remove();
+ const overlay=document.createElement('div');overlay.id='pixelAdvancedEditor';overlay.className='pixelEditorOverlay';
+ const form=document.createElement('form');form.className='pixelEditorPanel';
+ const heading=document.createElement('h3');heading.textContent='✦ Advanced Room Editor';
+ const note=document.createElement('p');note.textContent='Customize this room live. Furniture editing remains available using Edit Furniture in the room.';
+ const field=(title,input)=>{const label=document.createElement('label');label.textContent=title;label.append(input);form.append(label);return input};
+ const color=(value)=>{const input=document.createElement('input');input.type='color';input.value=/^#[0-9a-f]{6}$/i.test(value||'')?value:'#827b8f';return input};
+ const wall=color(room.wall_color),floor=color(room.floor_color);
+ const pattern=document.createElement('select');for(const name of ['checker','solid','wood','tiles']){const opt=document.createElement('option');opt.value=name;opt.textContent=name[0].toUpperCase()+name.slice(1);pattern.append(opt)}pattern.value=room.floor_pattern||'checker';
+ const layout=document.createElement('select');for(const name of ['classic','lounge','studio']){const opt=document.createElement('option');opt.value=name;opt.textContent=name[0].toUpperCase()+name.slice(1);layout.append(opt)}layout.value=room.layout||'classic';
+ const actions=document.createElement('div');actions.className='pixelEditorActions';
+ const close=document.createElement('button');close.type='button';close.textContent='Cancel';close.onclick=()=>overlay.remove();
+ const save=document.createElement('button');save.type='submit';save.textContent='Save changes';
+ const status=document.createElement('p');status.setAttribute('role','status');
+ form.append(heading,note);field('Wall color',wall);field('Floor color',floor);field('Floor pattern',pattern);field('Room layout',layout);
+ actions.append(close,save);form.append(actions,status);overlay.append(form);document.body.append(overlay);
+ overlay.addEventListener('click',event=>{if(event.target===overlay)overlay.remove()});
+ const original={wall_color:room.wall_color,floor_color:room.floor_color,floor_pattern:room.floor_pattern,layout:room.layout};
+ const preview=()=>Object.assign(room,{wall_color:wall.value,floor_color:floor.value,floor_pattern:pattern.value,layout:layout.value});
+ for(const input of [wall,floor,pattern,layout])input.addEventListener('input',preview);
+ const cancel=()=>{if(room&&Number(room.id)===Number(original.roomId||room.id))Object.assign(room,original)};
+ close.addEventListener('click',cancel);overlay.addEventListener('click',event=>{if(event.target===overlay)cancel()});
+ form.onsubmit=async event=>{
+  event.preventDefault();save.disabled=true;status.textContent='Saving room design…';
+  try{const updated=await api('/rooms/'+room.id,'PATCH',{wall_color:wall.value,floor_color:floor.value,floor_pattern:pattern.value,layout:layout.value});room=updated;overlay.remove();toast('Room design saved')}
+  catch(error){status.textContent=error.message||'Could not save';save.disabled=false}
+ };
+}
+window.pixelAdvancedRoomEditor=openAdvancedRoomEditor;
 window.join=join;
 function connect(){socket=io({auth:{token}});socket.on('social:changed',()=>window.dispatchEvent(new Event('pixel:social-update')));socket.on('social:message',msg=>{window.dispatchEvent(new Event('pixel:social-update'));if(Number(msg.recipient_id)===Number(me?.id))window.dispatchEvent(new CustomEvent('pixel:social-message',{detail:msg}))});socket.on('connect',()=>join(1));socket.on('connect_error',e=>toast(e.message));socket.on('room:updated',updated=>{if(room&&Number(updated.id)===Number(room.id)){room=updated;$('#roomTitle').textContent='🏨 '+room.name;updateGuests()}});socket.on('room:kicked',data=>{toast(data.reason||'You were removed from the room');join(1)});socket.on('room:entry-request',data=>{toast('🔔 A guest requested entry to your locked room. Open Room-O-Matic → Your Rooms → Entry Requests.')});socket.on('room:entry-decision',data=>{toast(data.status==='approved'?'✓ Your locked room entry request was approved! Open the Room Navigator to enter.':'Your locked room entry request was denied.')});socket.on('account:changed',async data=>{if(data&&Number.isFinite(Number(data.coins))&&data.coins!==undefined){me.coins=Number(data.coins);identity()}else await refreshCoinBalance()});socket.on('player:joined',p=>{players.set(p.socketId,p);updateGuests()});socket.on('player:left',id=>{players.delete(id);chatBubbles.delete(id);updateGuests()});socket.on('player:identity',p=>{const player=players.get(p.socketId);if(player){player.user=p.user;updateGuests()}});socket.on('player:avatar',p=>{const a=players.get(p.socketId);if(a)a.user.avatar=p.avatar});socket.on('player:held',p=>{const a=players.get(p.socketId);if(a)a.held=p.held;const drop=document.getElementById('dropHeldFood');if(drop&&p.socketId===socket.id)drop.hidden=!p.held});socket.on('player:pose',p=>{const a=players.get(p.socketId);if(a)a.pose=p.pose});socket.on('player:emote',p=>{const a=players.get(p.socketId);if(a)a.emote={name:p.name,until:p.until}});socket.on('player:moved',p=>{const a=players.get(p.socketId);if(a){a.x=p.x;a.y=p.y}});socket.on('chat:message',m=>{if(m.socketId&&players.has(m.socketId)){const now=Date.now(),entry=chatBubbles.get(m.socketId)||{messages:[]};entry.messages=entry.messages.filter(v=>v.until>now);entry.messages.push({text:String(m.body||''),until:now+7500});entry.messages=entry.messages.slice(-3);chatBubbles.set(m.socketId,entry)}});socket.on('furniture:added',f=>furniture.push(f));socket.on('furniture:moved',data=>{const f=furniture.find(v=>v.id===data.id);if(f){f.x=data.x;f.y=data.y}});socket.on('furniture:effect',data=>{furnitureEffects.set(data.id,data)});socket.on('furniture:light',data=>{furnitureLights.set(data.id,data.enabled)});socket.on('furniture:rotated',data=>{const f=furniture.find(item=>item.id===data.id);if(f)f.rotation=data.rotation;});socket.on('furniture:removed',id=>{furniture=furniture.filter(f=>f.id!==id)});socket.on('moderation:warning',data=>{alert('Hotel staff warning: '+String(data.reason||'Please follow hotel rules'))});socket.on('trade:updated',()=>{toast('Your trade has been updated');loadInventory().catch(()=>{})});socket.on('disconnect',()=>{$('#online').textContent='Disconnected'})}
 async function loadRooms(){const rooms=await api('/rooms');$('#rooms').replaceChildren();for(const r of rooms){const b=document.createElement('div');b.className='roomButton';b.dataset.roomId=String(r.id);b.textContent='🚪 '+r.name;const s=document.createElement('small');s.textContent=r.description||'Visit this room';b.append(s);b.onclick=()=>join(r.id);$('#rooms').append(b)}}
