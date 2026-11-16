@@ -770,6 +770,15 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    ack({error:'This item has no special interaction'});
   }catch(e){console.error(e);ack({error:'Interaction failed'})}
  });
+ s.on('furniture:height',async({itemId,height}={},ack=()=>{})=>{
+  const roomId=s.data.roomId;itemId=Number(itemId);height=Number(height);
+  if(!roomId||!Number.isSafeInteger(itemId)||!Number.isInteger(height)||height<20||height>72)return ack({error:'Invalid height'});
+  try{
+   const result=await pool.query('UPDATE furniture SET stack_height=$1 WHERE id=$2 AND room_id=$3 AND owner_id=$4 AND support_id IS NOT NULL RETURNING id,stack_height',[height,itemId,roomId,s.data.user.id]);
+   if(!result.rowCount)return ack({error:'Select an item stacked on a table'});
+   io.to('room:'+roomId).emit('furniture:height',result.rows[0]);ack({ok:true,height});
+  }catch(e){console.error(e);ack({error:'Could not adjust height'})}
+ });
  s.on('furniture:rotate',async(itemId,ack=()=>{})=>{try{
    const roomId=s.data.roomId,id=Number(itemId);
    if(!roomId||!Number.isSafeInteger(id)||id<1)return ack({error:'Invalid furniture'});
