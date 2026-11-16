@@ -54,6 +54,23 @@ const ownerGuard=(req,res,next)=>req.user.role==='owner'?next():res.status(403).
 const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
 
 app.get('/api/rooms',auth,async(req,res)=>{try{res.json((await pool.query('SELECT r.id,r.name,r.description,r.owner_id,r.is_public,u.username AS owner FROM rooms r LEFT JOIN users u ON u.id=r.owner_id ORDER BY r.id LIMIT 100')).rows);}catch(e){fail(res,e);}});
+// Large furniture occupies more than its anchor tile; rotations swap its footprint axes.
+const furnitureSize=kind=>({
+ sofa:[2,1],club_sofa:[2,1],christmas_sofa:[2,1],bed:[2,2],
+ table:[2,1],bookshelf:[2,1],aquarium:[2,1],christmas_fireplace:[2,1],
+ golden_fountain:[2,2],vending_machine:[1,2],fridge:[1,2]
+}[kind]||[1,1]);
+const furnitureTiles=(item)=>{
+ const [w,h]=furnitureSize(item.kind),rot=((Number(item.rotation)||0)%4+4)%4;
+ const width=rot%2?h:w,height=rot%2?w:h,tiles=[];
+ for(let dx=0;dx<width;dx++)for(let dy=0;dy<height;dy++)tiles.push({x:Number(item.x)+dx,y:Number(item.y)+dy});
+ return tiles;
+};
+const furnitureBlocked=(items,ignoreId)=>new Set(items.filter(f=>Number(f.id)!==Number(ignoreId)).flatMap(f=>furnitureTiles(f).map(p=>p.x+','+p.y)));
+const validFurniturePlacement=(candidate,items,ignoreId)=>{
+ const blocked=furnitureBlocked(items,ignoreId);
+ return furnitureTiles(candidate).every(p=>p.x>=0&&p.x<=9&&p.y>=0&&p.y<=9&&!blocked.has(p.x+','+p.y));
+};
 const roomStyle=(body={})=>{
  const validColor=(v,fallback)=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:fallback;
  return {wall_color:validColor(body.wall_color,'#827b8f'),floor_color:validColor(body.floor_color,'#b3b8c8'),floor_pattern:['checker','solid','wood','tiles'].includes(body.floor_pattern)?body.floor_pattern:'checker',layout:['classic','lounge','studio'].includes(body.layout)?body.layout:'classic'};
@@ -540,7 +557,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    ack({ok:true}); 
   }catch(e){console.error(e);ack({error:'Could not remove guest'})}
  });
- s.on('room:join',async(id,ack=()=>{})=>{try{if(tradeBySocket.has(s.id))endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled: player changed rooms');id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query("SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2 OR EXISTS(SELECT 1 FROM room_entry_requests q WHERE q.room_id=rooms.id AND q.user_id=$2 AND q.status='approved'))",[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room is locked or unavailable'});const kickKey=id+':'+s.data.user.id;const blockedUntil=roomKickTimeouts.get(kickKey)||0;if(blockedUntil>Date.now()&&r.rows[0].owner_id!==s.data.user.id)return ack({error:'The room owner removed you. Try again in '+Math.ceil((blockedUntil-Date.now())/60000)+' minutes.'});if(blockedUntil&&blockedUntil<=Date.now())roomKickTimeouts.delete(kickKey);leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const occupiedTiles=new Set(furn.map(f=>f.x+','+f.y));const spawn=([{x:4,y:4},...Array.from({length:100},(_,i)=>({x:i%10,y:Math.floor(i/10)}))]).find(p=>!occupiedTiles.has(p.x+','+p.y))||{x:4,y:4};positions.set(s.id,spawn);const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,lights:furn.filter(f=>furnitureLightStates.has(id+':'+f.id)).map(f=>({id:f.id,enabled:furnitureLightStates.get(id+':'+f.id)})),players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:spawn.x,y:spawn.y});}catch(e){console.error(e);ack({error:'Join failed'});}});
+ s.on('room:join',async(id,ack=()=>{})=>{try{if(tradeBySocket.has(s.id))endTrade(liveTrades.get(tradeBySocket.get(s.id)),'Trade cancelled: player changed rooms');id=Number(id);if(!Number.isInteger(id))return ack({error:'Invalid room'});const r=await pool.query("SELECT * FROM rooms WHERE id=$1 AND (is_public OR owner_id=$2 OR EXISTS(SELECT 1 FROM room_entry_requests q WHERE q.room_id=rooms.id AND q.user_id=$2 AND q.status='approved'))",[id,s.data.user.id]);if(!r.rowCount)return ack({error:'Room is locked or unavailable'});const kickKey=id+':'+s.data.user.id;const blockedUntil=roomKickTimeouts.get(kickKey)||0;if(blockedUntil>Date.now()&&r.rows[0].owner_id!==s.data.user.id)return ack({error:'The room owner removed you. Try again in '+Math.ceil((blockedUntil-Date.now())/60000)+' minutes.'});if(blockedUntil&&blockedUntil<=Date.now())roomKickTimeouts.delete(kickKey);leave(s);s.join(`room:${id}`);s.data.roomId=id;if(!occupants.has(id))occupants.set(id,new Set());occupants.get(id).add(s.id);poses.delete(s.id);const furn=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1 ORDER BY id',[id])).rows;const occupiedTiles=furnitureBlocked(furn);const spawn=([{x:4,y:4},...Array.from({length:100},(_,i)=>({x:i%10,y:Math.floor(i/10)}))]).find(p=>!occupiedTiles.has(p.x+','+p.y))||{x:4,y:4};positions.set(s.id,spawn);const messages=(await pool.query('SELECT m.body,m.created_at,u.username FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=$1 ORDER BY m.id DESC LIMIT 30',[id])).rows.reverse();ack({room:r.rows[0],furniture:furn,lights:furn.filter(f=>furnitureLightStates.has(id+':'+f.id)).map(f=>({id:f.id,enabled:furnitureLightStates.get(id+':'+f.id)})),players:occupantsFor(id),messages});s.to(`room:${id}`).emit('player:joined',{socketId:s.id,user:displayUser(s.data.user),x:spawn.x,y:spawn.y});}catch(e){console.error(e);ack({error:'Join failed'});}});
  // Server-authoritative tile walking: one adjacent tile every 240 ms.
  // A new click cancels the previous route; players cannot teleport by sending coordinates.
  let walkTimer=null;
@@ -557,8 +574,8 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    // remains visual-only until it has corresponding collision footprints.
    let blocked=new Set();
    try{
-     const rows=(await pool.query('SELECT x,y FROM furniture WHERE room_id=$1',[roomId])).rows;
-     blocked=new Set(rows.map(p=>p.x+','+p.y));
+     const rows=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId])).rows;
+     blocked=furnitureBlocked(rows);
    }catch(e){console.error('Path query failed',e);return;}
    if(s.data.roomId!==roomId)return;
    blocked.delete(current.x+','+current.y);
@@ -586,9 +603,9 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
        if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
        const next=path[index];if(!next){stopWalking();return;}
        // Check every step against the live room state, not just the original route.
-       const occupied=await pool.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3 LIMIT 1',[roomId,next.x,next.y]);
+       const occupied=await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId]);
        if(s.data.roomId!==roomId||!s.connected){stopWalking();return;}
-       if(occupied.rowCount){stopWalking();return;}
+       if(furnitureBlocked(occupied.rows).has(next.x+','+next.y)){stopWalking();return;}
        index++;
        positions.set(s.id,next);
        io.to('room:'+roomId).emit('player:moved',{socketId:s.id,x:next.x,y:next.y});
@@ -628,8 +645,8 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    const current=positions.get(s.id),pose=poses.get(s.id);
    if(!pose)return ack({ok:true});
    try{
-     const rows=(await pool.query('SELECT x,y FROM furniture WHERE room_id=$1',[roomId])).rows;
-     const blocked=new Set(rows.map(f=>f.x+','+f.y));
+     const rows=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId])).rows;
+     const blocked=furnitureBlocked(rows);
      const origin=current||{x:4,y:4};
      const candidates=[];
      for(let distance=1;distance<=18;distance++)for(let dx=-distance;dx<=distance;dx++)for(let dy=-distance;dy<=distance;dy++){
@@ -651,7 +668,7 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    lastEmote=Date.now();io.to('room:'+s.data.roomId).emit('player:emote',{socketId:s.id,name,until:Date.now()+3500});ack({ok:true});
  });
  s.on('chat:send',async(body,ack=()=>{})=>{try{const now=Date.now();if(now-lastChat<900)return ack({error:'Slow down'});lastChat=now;body=safe(body,240);if(!body||!s.data.roomId)return ack({error:'Cannot send'});await pool.query('INSERT INTO messages(room_id,user_id,body) VALUES($1,$2,$3)',[s.data.roomId,s.data.user.id,body]);io.to(`room:${s.data.roomId}`).emit('chat:message',{username:displayUser(s.data.user).username,userId:s.data.user.id,body,socketId:s.id});ack({ok:true});}catch(e){console.error(e);ack({error:'Chat failed'});}});
- s.on('furniture:place',async({kind,x,y}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3',[id,x,y]);if(occ.rowCount){await client.query('ROLLBACK');return ack({error:'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y) VALUES($1,$2,$3,$4,$5) RETURNING id,kind,x,y,rotation',[id,s.data.user.id,kind,x,y])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
+ s.on('furniture:place',async({kind,x,y}={},ack=()=>{})=>{const id=s.data.roomId;kind=safe(kind,30);x=Number(x);y=Number(y);if(!id||!CATALOG[kind]||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>9||y>9)return ack({error:'Invalid placement'});const client=await pool.connect();try{await client.query('BEGIN');const owner=await client.query('SELECT owner_id FROM rooms WHERE id=$1',[id]);if(owner.rows[0]?.owner_id!==s.data.user.id){await client.query('ROLLBACK');return ack({error:'Only room owner can decorate'});}const occ=await client.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[id]);if(!validFurniturePlacement({kind,x,y,rotation:0},occ.rows)){await client.query('ROLLBACK');return ack({error:'Tile occupied'});}const inv=await client.query('UPDATE inventory SET quantity=quantity-1 WHERE user_id=$1 AND kind=$2 AND quantity>0 RETURNING quantity',[s.data.user.id,kind]);if(!inv.rowCount){await client.query('ROLLBACK');return ack({error:'Item not in inventory'});}const item=(await client.query('INSERT INTO furniture(room_id,owner_id,kind,x,y) VALUES($1,$2,$3,$4,$5) RETURNING id,kind,x,y,rotation',[id,s.data.user.id,kind,x,y])).rows[0];await client.query('COMMIT');io.to(`room:${id}`).emit('furniture:added',item);ack({ok:true});}catch(e){await client.query('ROLLBACK');console.error(e);ack({error:'Placement failed'});}finally{client.release();}});
  // Interactive consumable dispensers: server chooses the item, never the browser.
  s.on('furniture:dispense',async(itemId,ack=()=>{})=>{
   const roomId=s.data.roomId,id=Number(itemId),now=Date.now();
@@ -685,10 +702,10 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
    await client.query('BEGIN');
    const room=await client.query('SELECT owner_id FROM rooms WHERE id=$1 FOR UPDATE',[roomId]);
    if(room.rows[0]?.owner_id!==s.data.user.id)throw Error('Only the room owner can move furniture');
-   const item=await client.query('SELECT id FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3 FOR UPDATE',[itemId,roomId,s.data.user.id]);
+   const item=await client.query('SELECT id,kind,x,y,rotation FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3 FOR UPDATE',[itemId,roomId,s.data.user.id]);
    if(!item.rowCount)throw Error('Furniture not found');
-   const occupied=await client.query('SELECT 1 FROM furniture WHERE room_id=$1 AND x=$2 AND y=$3 AND id<>$4',[roomId,x,y,itemId]);
-   if(occupied.rowCount)throw Error('That tile is occupied');
+   const occupied=await client.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId]);
+   if(!validFurniturePlacement({...item.rows[0],x,y},occupied.rows,itemId))throw Error('That tile is occupied');
    const result=await client.query('UPDATE furniture SET x=$1,y=$2 WHERE id=$3 RETURNING id,x,y',[x,y,itemId]);
    await client.query('COMMIT');
    for(const [sid,pose] of poses)if(pose?.seatId===itemId){poses.delete(sid);io.to('room:'+roomId).emit('player:pose',{socketId:sid,pose:null})}
@@ -742,6 +759,10 @@ io.on('connection',s=>{let lastChat=0,lastMove=0;
  s.on('furniture:rotate',async(itemId,ack=()=>{})=>{try{
    const roomId=s.data.roomId,id=Number(itemId);
    if(!roomId||!Number.isSafeInteger(id)||id<1)return ack({error:'Invalid furniture'});
+   const current=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE id=$1 AND room_id=$2 AND owner_id=$3',[id,roomId,s.data.user.id])).rows[0];
+   if(!current)return ack({error:'Only the room owner can rotate this furniture'});
+   const all=(await pool.query('SELECT id,kind,x,y,rotation FROM furniture WHERE room_id=$1',[roomId])).rows;
+   if(!validFurniturePlacement({...current,rotation:(current.rotation+1)%4},all,id))return ack({error:'Not enough free space to rotate'});
    const result=await pool.query('UPDATE furniture SET rotation=(rotation+1)%4 WHERE id=$1 AND room_id=$2 AND owner_id=$3 RETURNING id,rotation',[id,roomId,s.data.user.id]);
    if(!result.rowCount)return ack({error:'Only the room owner can rotate this furniture'});
    io.to('room:'+roomId).emit('furniture:rotated',result.rows[0]);
