@@ -78,3 +78,8 @@ INSERT INTO catalog_limited_stock(kind,remaining,initial_stock) VALUES
  ('neon_arcade',250,250),('golden_fountain',100,100),('autumn_throne',175,175)
  ON CONFLICT(kind) DO NOTHING;
 CREATE TABLE IF NOT EXISTS catalog_purchases (id BIGSERIAL PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,kind VARCHAR(40) NOT NULL,price INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+
+-- Furniture stacking: height is a visual lift; support_id identifies a supporting table.
+ALTER TABLE furniture ADD COLUMN IF NOT EXISTS stack_height INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE furniture ADD COLUMN IF NOT EXISTS support_id INTEGER REFERENCES furniture(id) ON DELETE RESTRICT;
+CREATE INDEX IF NOT EXISTS idx_furniture_support ON furniture(support_id);
