@@ -186,7 +186,11 @@ function clickTile(e){
  }
  const dx=(px-500)/43,dy=(py-118)/24,x=Math.floor((dx+dy)/2+.5),y=Math.floor((dy-dx)/2+.5);
  if(x<0||y<0||x>9||y>9)return;
- const item=furniture.find(f=>f.x===x&&f.y===y);
+ const item=furniture.find(f=>{
+  const sizes={sofa:[2,1],club_sofa:[2,1],christmas_sofa:[2,1],bed:[2,2],table:[2,1],bookshelf:[2,1],aquarium:[2,1],christmas_fireplace:[2,1],golden_fountain:[2,2],vending_machine:[1,2],fridge:[1,2]};
+  const [w,h]=sizes[f.kind]||[1,1],rot=((Number(f.rotation)||0)%4+4)%4;
+  return x>=f.x&&y>=f.y&&x<f.x+(rot%2?h:w)&&y<f.y+(rot%2?w:h);
+ });
  if(rotateMode){
   if(furnitureMoveMode&&rotationTarget){
    socket.emit('furniture:move',{itemId:rotationTarget,x,y},a=>{if(a?.error)toast(a.error);else{toast('Furniture moved');rotationTarget=null;furnitureMoveMode=false;updateRotateControls()}});return;
